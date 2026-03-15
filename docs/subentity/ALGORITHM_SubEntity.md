@@ -448,6 +448,55 @@ The emotion changes the citizen, not the layer. The citizen's changed state then
 
 The citizen dreamt the solution. The L2 graph saw only the energy change. The plan lives in L1 until the membrane opens.
 
+### Link Creation Inherits L1 Emotion
+
+When a citizen creates any L2 link (committing code, creating a task, linking nodes), the link's initial relational dimensions are projected from the citizen's current L1 emotional state:
+
+```
+on citizen_creates_link(citizen, source, target):
+    link.trust     = citizen.l1.current_trust_toward(target)
+    link.friction  = citizen.l1.current_friction
+    link.affinity  = citizen.l1.current_affinity_toward(target)
+    link.aversion  = citizen.l1.current_aversion_toward(target)
+```
+
+This means the same link created by two different citizens — or the same citizen at different times — will have different physics properties. A frustrated citizen debugging at 3am creates links with high friction and low trust. The same citizen after a breakthrough creates links with high trust and high affinity. The emotion is not on the link — but the **structural shadow** of the emotion is.
+
+Physics (L5, L6, L7) then evolves the link from that starting point. The emotion fades from the citizen's L1, but its imprint on the L2 link persists until overwritten by new co-activation.
+
+### Traversal Colors Nodes
+
+When a SubEntity traverses a node, it doesn't just read it — it **colors** it. The node absorbs a trace of the traversing citizen's emotional state:
+
+```
+on subentity_traverses(subentity, node):
+    # Energy injection (already documented in Step 3)
+    energy = subentity.criticality × STATE_MULTIPLIER[subentity.state]
+    node.energy += energy
+
+    # Emotional coloring: the citizen's L1 state tints the node
+    citizen = subentity.owner
+    emotional_delta = citizen.l1.arousal × 0.1   # small but cumulative
+
+    # Valence shift: positive emotion → node becomes more attractive
+    #                negative emotion → node becomes more repulsive
+    node.valence += citizen.l1.valence_state × emotional_delta
+
+    # Friction deposit: frustrated traversal leaves friction on the node
+    if citizen.l1.frustration > 0.5:
+        node.friction += citizen.l1.frustration × 0.05
+
+    # Affinity trace: curious traversal makes the node more approachable for others
+    if citizen.l1.curiosity > 0.5:
+        node.affinity += citizen.l1.curiosity × 0.05
+```
+
+Over time, heavily-traversed nodes accumulate the emotional residue of every citizen who passed through them. A node that was repeatedly visited in frustration (a persistent bug) radiates friction — other citizens approaching it feel the resistance before they even read the code. A node that was visited in curiosity and delight (a clever algorithm) radiates affinity — it naturally attracts attention.
+
+This is the **Emotional Heritage** described in the DevBoard Manifesto: "Un monument né d'une frustration intense irradiera une aura de prudence et de mise en garde, tandis qu'une vérité stabilisée brillera d'une attraction magnétique."
+
+The coloring is in L1 terms (valence, friction, affinity) projected onto L2 nodes. The L2 node doesn't "feel" — but it carries the structural imprint of every citizen who touched it.
+
 ---
 
 ## ALGORITHM: Task Lifecycle (Ingestion SubEntity)
