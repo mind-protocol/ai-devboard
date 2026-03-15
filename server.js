@@ -166,6 +166,46 @@ app.get('/api/nodes/:graph', async (req, res) => {
   } catch (e) { res.json([]) }
 })
 
+// L1 Brains — subconscious state of all citizens
+app.get('/api/brains', async (req, res) => {
+  try {
+    // List all brain_* graphs
+    const allGraphs = await redis.sendCommand(['GRAPH.LIST'])
+    const brainGraphs = (allGraphs || []).filter(g => g.startsWith('brain_'))
+
+    const brains = []
+    for (const brain of brainGraphs) {
+      const handle = brain.replace('brain_', '')
+      try {
+        // Get active nodes sorted by energy
+        const raw = await redis.sendCommand(['GRAPH.QUERY', brain,
+          `MATCH (n) WHERE n.energy > 0.005 RETURN labels(n)[0] AS type, n.id AS id, n.name AS name, n.subtype AS subtype, n.energy AS energy, n.weight AS weight, n.synthesis AS synthesis, n.content AS content ORDER BY n.energy DESC LIMIT 20`])
+        const nodes = (raw?.[1] || []).map(row => ({
+          type: row[0], id: row[1], name: row[2] || row[1], subtype: row[3] || '',
+          energy: parseFloat(row[4]) || 0, weight: parseFloat(row[5]) || 0,
+          synthesis: row[6] || '', content: row[7] || '',
+        }))
+        if (nodes.length > 0) {
+          // Get total node count
+          const countRaw = await redis.sendCommand(['GRAPH.QUERY', brain, 'MATCH (n) RETURN count(n)'])
+          const totalNodes = countRaw?.[1]?.[0]?.[0] || 0
+
+          // Get type distribution
+          const typeRaw = await redis.sendCommand(['GRAPH.QUERY', brain,
+            `MATCH (n) WHERE n.energy > 0.005 RETURN labels(n)[0], count(n) AS cnt ORDER BY cnt DESC`])
+          const types = (typeRaw?.[1] || []).map(r => ({ type: r[0], count: r[1] }))
+
+          brains.push({ handle, brain, totalNodes, activeNodes: nodes.length, types, nodes })
+        }
+      } catch (_) {}
+    }
+
+    // Sort by number of active nodes
+    brains.sort((a, b) => b.activeNodes - a.activeNodes)
+    res.json(brains)
+  } catch (e) { res.json({ error: e.message }) }
+})
+
 // Full citizen dashboard — L1 + L2 state, tasks, messages, active nodes
 app.get('/api/dashboard/:graph', async (req, res) => {
   const { graph } = req.params

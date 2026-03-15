@@ -79,12 +79,14 @@ function App() {
   const [streaming, setStreaming] = useState(false)
   const [citizens, setCitizens] = useState([])
   const [useL2, setUseL2] = useState(false)
-  const [view, setView] = useState('nodes') // 'graph' | 'nodes'
+  const [view, setView] = useState('nodes') // 'graph' | 'nodes' | 'brains'
+  const [brainData, setBrainData] = useState([])
   const [nodeList, setNodeList] = useState([])
-  const [timeFilter, setTimeFilter] = useState(10) // minutes
+  const [timeFilter, setTimeFilter] = useState(0) // 0 = all (no time filter)
   const [sortCol, setSortCol] = useState('energy') // default sort column
   const [sortDir, setSortDir] = useState(-1) // -1 = desc, 1 = asc
   const [typeFilter, setTypeFilter] = useState(new Set()) // empty = show all
+  const [stats, setStats] = useState({ activeCitizens: 0, totalMoments: 0 })
   const [searchText, setSearchText] = useState('') // text search across fields
   const tickRef = useRef(null)
   const sseRef = useRef(null)
@@ -92,9 +94,45 @@ function App() {
 
   useEffect(() => {
     fetch('/api/graphs').then(r => r.json()).then(setGraphs).catch(() => {})
-    // Auto-load graph on mount
+    // Auto-load on mount
     runQuery()
+    loadNodeList()
+    loadStats()
   }, [])
+
+  const loadBrains = async () => {
+    setStatus('Loading L1 brains...')
+    try {
+      const res = await fetch('/api/brains')
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setBrainData(data)
+        const total = data.reduce((s, b) => s + b.activeNodes, 0)
+        setStatus(`${data.length} active brains, ${total} conscious nodes`)
+      }
+    } catch (e) { setStatus(`Error: ${e.message}`) }
+  }
+
+  const loadStats = async () => {
+    try {
+      const res = await fetch(`/api/monitor/${graphName}`)
+      const data = await res.json()
+      // Count moments created in last 10 min
+      const since10m = Math.floor(Date.now() / 1000) - 600
+      let moments = 0
+      try {
+        const mRes = await fetch(`/api/nodes/${graphName}?limit=5000&since=${since10m}`)
+        const mNodes = await mRes.json()
+        moments = Array.isArray(mNodes) ? mNodes.filter(n => n.type === 'Moment').length : 0
+      } catch (_) {}
+      // Active citizens = those with last activity in 10 min
+      const dashRes = await fetch(`/api/dashboard/${graphName}`)
+      const citizens = await dashRes.json()
+      const now = Math.floor(Date.now() / 1000)
+      const active = Array.isArray(citizens) ? citizens.filter(c => c.lastActive && (now - c.lastActive) < 600).length : 0
+      setStats({ activeCitizens: active, totalMoments: moments })
+    } catch (_) {}
+  }
 
   // SSE stream — subscribe to graph deltas
   useEffect(() => {
@@ -148,6 +186,7 @@ function App() {
         setStatus(`Tick: ${data.decayed || 0} decayed, ${data.propagated || 0} propagated`)
       }
       if (!streaming) runQuery()
+      loadStats()
     } catch (e) { setStatus(`Tick error: ${e.message}`) }
   }
 
@@ -322,10 +361,11 @@ function App() {
           <button onClick={runTick}>⚡ 1 tick</button>
         </div>
         <button className={`l2-toggle ${useL2 ? 'active' : ''}`}
-          onClick={() => setUseL2(!useL2)}>{useL2 ? 'L2' : 'L1'}</button>
+          onClick={() => setUseL2(!useL2)}>{useL2 ? 'Subconscious' : 'Physics'}</button>
         <div className="view-tabs">
           <button className={view === 'graph' ? 'active' : ''} onClick={() => setView('graph')}>Graph</button>
           <button className={view === 'nodes' ? 'active' : ''} onClick={() => { setView('nodes'); loadNodeList() }}>Nodes</button>
+          <button className={view === 'brains' ? 'active' : ''} onClick={() => { setView('brains'); loadBrains() }}>Brains</button>
           {view === 'nodes' && <>
             <span className="filter-sep">|</span>
             <div className="search-box">
@@ -363,6 +403,8 @@ function App() {
         <span className={`stream-indicator ${streaming ? 'live' : 'off'}`}>
           {streaming ? 'SSE LIVE' : 'SSE OFF'}
         </span>
+        <span className="stats-badge">{stats.activeCitizens} awake</span>
+        <span className="stats-badge moments">{stats.totalMoments} moments</span>
         <span className="status">{status}</span>
         <div className="legend">
           {Object.entries(COLORS).map(([k, v]) => <span key={k} style={{ color: v }}>● {k} </span>)}
@@ -416,6 +458,33 @@ function App() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {view === 'brains' && (
+        <div className="brains-view">
+          {brainData.length === 0 && <div className="brain-empty">No active brains — citizens are dormant</div>}
+          {brainData.map(b => (
+            <div key={b.handle} className="brain-card">
+              <div className="brain-header">
+                <span className="brain-handle">@{b.handle}</span>
+                <span className="brain-stats">{b.activeNodes} active / {b.totalNodes} total</span>
+                <span className="brain-types">
+                  {b.types.map(t => <span key={t.type} className="type-badge" style={{ background: COLORS[t.type] || '#666', marginRight: 4 }}>{t.type} {t.count}</span>)}
+                </span>
+              </div>
+              <div className="brain-nodes">
+                {b.nodes.map((n, i) => (
+                  <div key={i} className="brain-node">
+                    <span className="brain-node-energy" style={{ width: `${Math.min(n.energy * 100, 100)}%` }} />
+                    <span className="brain-node-type" style={{ color: COLORS[n.type] || '#888' }}>{n.subtype || n.type}</span>
+                    <span className="brain-node-name">{boldHandles(n.name?.slice(0, 60) || n.id)}</span>
+                    <span className="brain-node-content">{(n.synthesis || n.content || '').slice(0, 80)}</span>
+                    <span className="brain-node-e">E={n.energy.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

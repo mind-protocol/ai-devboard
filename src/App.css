@@ -28,6 +28,11 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
 }
 .stream-indicator.live { background: #16a34a22; color: #4ade80; border: 1px solid #16a34a; }
 .stream-indicator.off { background: #55555522; color: #888; border: 1px solid #555; }
+.stats-badge {
+  font-size: 10px; padding: 2px 6px; border-radius: 3px;
+  background: #1a1a2a; color: #818cf8; border: 1px solid #333;
+}
+.stats-badge.moments { color: #f59e0b; }
 .l2-toggle {
   background: #333; color: #ccc; border: 1px solid #555; padding: 4px 10px;
   border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: bold;
@@ -139,5 +144,35 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
   font-variant-numeric: tabular-nums;
 }
 .filter-sep { color: #444; font-size: 12px; margin: 0 2px; }
+/* Brains view */
+.brains-view { flex: 1; overflow: auto; padding: 8px 12px; background: #0a0a0a; }
+.brain-empty { color: #555; text-align: center; padding: 40px; font-style: italic; }
+.brain-card {
+  background: #111; border: 1px solid #222; border-radius: 6px;
+  margin-bottom: 8px; overflow: hidden;
+}
+.brain-header {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: #1a1a1a; border-bottom: 1px solid #222;
+}
+.brain-handle { color: #a78bfa; font-weight: bold; font-size: 14px; }
+.brain-stats { color: #888; font-size: 11px; }
+.brain-types { margin-left: auto; display: flex; gap: 4px; }
+.brain-nodes { padding: 4px 0; }
+.brain-node {
+  display: flex; align-items: center; gap: 8px; padding: 3px 12px;
+  font-size: 11px; position: relative; overflow: hidden;
+}
+.brain-node:hover { background: #1a1a2a; }
+.brain-node-energy {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, #3b82f622, transparent);
+  pointer-events: none;
+}
+.brain-node-type { color: #888; font-size: 10px; min-width: 60px; z-index: 1; }
+.brain-node-name { color: #ddd; z-index: 1; min-width: 200px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brain-node-content { color: #666; z-index: 1; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brain-node-e { color: #4ade80; font-family: monospace; font-size: 10px; z-index: 1; white-space: nowrap; }
+
 svg { flex: 1; cursor: grab; }
 svg:active { cursor: grabbing; }
