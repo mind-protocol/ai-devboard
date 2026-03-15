@@ -1,0 +1,310 @@
+# Grammar L2 — Code Cluster Definitions
+# How doc chain positions map to graph nodes, links, and subtypes
+#
+# Each cluster = one doc chain file → the graph nodes it creates,
+# the links between them, and the link dimension values.
+#
+# RULE: Each position in the doc chain gets a UNIQUE subtype
+# so we always know WHERE a node came from.
+
+version: "0.1"
+created: "2026-03-15"
+status: "DESIGNING"
+
+# =============================================================================
+# CLUSTER 1: OBJECTIVES → "what we want"
+# =============================================================================
+#
+# Source: docs/grammar/OBJECTIVES_Grammar.md
+# Justification: Objectives are the WHY — they create desire-like attractors
+# in the code graph. Each objective is a pull force.
+
+cluster_objectives:
+  source_doc: "docs/{area}/{module}/OBJECTIVES_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "objective"          # UNIQUE: only OBJECTIVES docs create this
+      justification: "An objective is an interpretive structure about what SHOULD exist. It's not a fact (Moment) or an entity (Thing) — it's a direction."
+      fields:
+        content: "The objective text (e.g., 'Zero-stored verbs — pure computation')"
+        weight: "Ranked position: #1 = 0.9, #2 = 0.7, #3 = 0.5"
+        stability: "0.8 — objectives resist change (they're foundational)"
+        energy: "0.5 — moderate (active but not urgent)"
+
+  links_created:
+    - from: "Narrative(subtype=objective)"
+      to: "Space(subtype=module)"     # the module this objective belongs to
+      r.type: "BELONGS_TO"
+      hierarchy: -0.8                  # objective is CONTAINED BY module
+      permanence: 0.9                  # objectives are near-permanent
+      trust: 0.9                       # we trust the stated objective
+      friction: 0.1                    # low friction — objectives are clear
+
+  example:
+    node:
+      id: "narrative:obj_zero_stored_verbs"
+      subtype: "objective"
+      content: "Zero-stored verbs — verbs are never stored in the database, always computed on-the-fly from 13 physical dimensions"
+      weight: 0.9
+    link_to_module:
+      target: "space:module_grammar"
+      r.type: "BELONGS_TO"
+      hierarchy: -0.8
+      permanence: 0.9
+
+# =============================================================================
+# CLUSTER 2: BEHAVIORS → "what it does observably"
+# =============================================================================
+#
+# Source: docs/grammar/BEHAVIORS_Grammar.md
+# Justification: Behaviors are observable effects — they're MOMENTS that
+# SHOULD happen. Each GIVEN/WHEN/THEN is a testable prediction.
+
+cluster_behaviors:
+  source_doc: "docs/{area}/{module}/BEHAVIORS_{Module}.md"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "behavior"           # UNIQUE: only BEHAVIORS docs create this
+      justification: "A behavior is a discrete observable event (GIVEN/WHEN/THEN). It's episodic — it describes something that happens, not something that exists."
+      fields:
+        content: "The GIVEN/WHEN/THEN block"
+        weight: "0.6 — behaviors have moderate consolidated importance"
+        stability: "0.5 — behaviors can evolve as understanding deepens"
+        energy: "0.3 — behaviors are not urgent, they're reference"
+
+  links_created:
+    - from: "Moment(subtype=behavior)"
+      to: "Narrative(subtype=objective)"
+      r.type: "VALIDATES"
+      hierarchy: 0.5                   # behavior ELABORATES objective
+      polarity: [0.8, 0.3]            # behavior flows FROM objective (tests it)
+      trust: 0.7                       # we mostly trust the behavior spec
+      permanence: 0.7                  # behaviors are fairly stable
+
+  example:
+    node:
+      id: "moment:behavior_verb_on_the_fly"
+      subtype: "behavior"
+      content: "GIVEN: a link with hierarchy=-0.6 and polarity=[0.8,0.2] WHEN: synthesize_link_phrase() is called THEN: returns 'contains' with temporal modifier"
+      weight: 0.6
+    link_to_objective:
+      target: "narrative:obj_zero_stored_verbs"
+      r.type: "VALIDATES"
+      hierarchy: 0.5
+
+# =============================================================================
+# CLUSTER 3: ALGORITHM → "how it works step by step"
+# =============================================================================
+#
+# Source: docs/grammar/ALGORITHM_Grammar.md
+# Justification: Algorithms are PROCESSES — step-by-step procedures
+# that can be executed. They're the "muscle memory" of the module.
+
+cluster_algorithm:
+  source_doc: "docs/{area}/{module}/ALGORITHM_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "algorithm"          # UNIQUE: only ALGORITHM docs create this
+      justification: "An algorithm is a process narrative — it describes HOW something works. It's interpretive (not a raw fact) and procedural (not a static entity)."
+      fields:
+        content: "Step-by-step pseudocode or procedure description"
+        weight: "0.7 — algorithms are important (they're the HOW)"
+        stability: "0.6 — algorithms change when understanding improves"
+        energy: "0.4 — reference, not urgent"
+
+    - node_type: Thing
+      subtype: "data_structure"     # UNIQUE: ALGORITHM docs define data structures
+      justification: "Data structures are concrete entities (like functions, classes). They're Things because they exist as defined artifacts."
+      fields:
+        content: "Structure definition (fields, types, constraints)"
+        weight: "0.5"
+
+  links_created:
+    - from: "Narrative(subtype=algorithm)"
+      to: "Moment(subtype=behavior)"
+      r.type: "IMPLEMENTS"
+      hierarchy: -0.3                  # algorithm is slightly below behavior (it serves it)
+      polarity: [0.7, 0.4]            # algorithm supports behavior
+      trust: 0.6                       # algorithm may not perfectly match behavior
+      friction: 0.2                    # some translation friction
+
+  example:
+    node:
+      id: "narrative:algo_link_synthesis_pipeline"
+      subtype: "algorithm"
+      content: "6-step pipeline: extract dimensions → temporal modifier → pre-verb → base verb (hierarchy×polarity) → post-verb → contextual override"
+      weight: 0.7
+    data_structure:
+      id: "thing:struct_link_phrase"
+      subtype: "data_structure"
+      content: "LinkPhrase { temporal: str, pre_verb: str, verb: str, post_verb: str, override: str? }"
+
+# =============================================================================
+# CLUSTER 4: IMPLEMENTATION → "where it lives in code"
+# =============================================================================
+#
+# Source: docs/grammar/IMPLEMENTATION_Grammar.md
+# Justification: Implementation maps docs to code files. Each file is a Thing
+# with an EvidenceRef. The IMPLEMENTATION doc creates the bridge.
+
+cluster_implementation:
+  source_doc: "docs/{area}/{module}/IMPLEMENTATION_{Module}.md"
+
+  nodes_created:
+    - node_type: Thing
+      subtype: "code_file"          # UNIQUE: IMPLEMENTATION docs point to code files
+      justification: "A code file is a concrete artifact — a Thing that exists on disk with a specific path, line count, and responsibility."
+      fields:
+        content: "File responsibility description"
+        evidence_ref:
+          repo: "mind-mcp"
+          path: "runtime/physics/synthesis.py"
+          commit_sha: null             # filled at ingestion
+          range: null                  # whole file
+          kind: "file_ref"
+        weight: "Proportional to file importance (lines, imports, centrality)"
+        energy: "Proportional to recent git activity"
+
+    - node_type: Thing
+      subtype: "code_function"      # UNIQUE: functions/classes within files
+      justification: "A function is a sub-artifact — a Thing inside a Thing, with its own EvidenceRef range."
+      fields:
+        evidence_ref:
+          kind: "function_ref"
+          range: "L42-L98"            # specific lines
+
+  links_created:
+    - from: "Thing(subtype=code_file)"
+      to: "Narrative(subtype=algorithm)"
+      r.type: "IMPLEMENTS"
+      hierarchy: -0.5                  # code file implements the algorithm
+      trust: 0.8                       # code is the ground truth
+      friction: 0.1                    # direct mapping
+      permanence: 0.8                  # code files are stable artifacts
+
+    - from: "Thing(subtype=code_file)"
+      to: "Space(subtype=module)"
+      r.type: "IN"
+      hierarchy: -0.9                  # file is deeply contained in module
+
+  example:
+    node:
+      id: "thing:file_synthesis_py"
+      subtype: "code_file"
+      content: "Link synthesis engine — generates verbs from 13 dimensions"
+      evidence_ref: { repo: "mind-mcp", path: "runtime/physics/synthesis.py", kind: "file_ref" }
+      weight: 0.8
+    link_to_algo:
+      target: "narrative:algo_link_synthesis_pipeline"
+      r.type: "IMPLEMENTS"
+      hierarchy: -0.5
+      trust: 0.8
+
+# =============================================================================
+# CLUSTER 5: VALIDATION → "what must be true"
+# =============================================================================
+#
+# Source: docs/grammar/VALIDATION_Grammar.md
+# Justification: Invariants are like VALUES in L1 — non-negotiable truths
+# with very high weight and stability. They resist change.
+
+cluster_validation:
+  source_doc: "docs/{area}/{module}/VALIDATION_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "invariant"          # UNIQUE: only VALIDATION docs create invariants
+      justification: "An invariant is a value-like narrative — something that MUST be true. Like a citizen's value node, it has max stability and resists erosion."
+      fields:
+        content: "MUST: ... / NEVER: ..."
+        weight: "0.9 — invariants are critical"
+        stability: "0.95 — almost immutable (like identity values)"
+        energy: "0.2 — low activation (always true, not urgent)"
+
+  links_created:
+    - from: "Narrative(subtype=invariant)"
+      to: "Moment(subtype=behavior)"
+      r.type: "CONSTRAINS"
+      hierarchy: 0.7                   # invariant is ABOVE behavior (it governs)
+      permanence: 0.95                 # near-permanent constraint
+      trust: 0.95                      # invariants are the most trusted
+      valence: 0.8                     # constructive (protective)
+
+  example:
+    node:
+      id: "narrative:inv_verbs_never_stored"
+      subtype: "invariant"
+      content: "MUST: Verbs are computed on-the-fly from dimensions. NEVER: Store a verb string on a link node in FalkorDB."
+      weight: 0.9
+      stability: 0.95
+
+# =============================================================================
+# CLUSTER 6: HEALTH → "how to verify at runtime"
+# =============================================================================
+#
+# Source: docs/grammar/HEALTH_Grammar.md
+# Justification: Health checks are PROCESSES — automated verification
+# routines. They're like process nodes with action_command.
+
+cluster_health:
+  source_doc: "docs/{area}/{module}/HEALTH_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "health_check"       # UNIQUE: only HEALTH docs create these
+      justification: "A health check is a process narrative with an executable verification. Like a process node, it carries action_command and drive_affinity."
+      fields:
+        content: "What to check and how"
+        action_command: "python -c 'from runtime.physics.synthesis import synthesize; ...'"
+        drive_affinity: { self_preservation: 0.8, achievement: 0.3 }
+        weight: "0.5 — moderate importance"
+        stability: "0.6 — health checks evolve with the system"
+
+  links_created:
+    - from: "Narrative(subtype=health_check)"
+      to: "Narrative(subtype=invariant)"
+      r.type: "VERIFIES"
+      hierarchy: -0.3                  # health check serves the invariant
+      trust: 0.7                       # health check may not cover everything
+      polarity: [0.8, 0.2]            # health check acts ON invariant
+
+  example:
+    node:
+      id: "narrative:health_determinism_check"
+      subtype: "health_check"
+      content: "Verify that synthesize_link_phrase() is deterministic — same dimensions always produce same verb"
+      action_command: "python -m pytest tests/test_grammar_determinism.py"
+      drive_affinity: { self_preservation: 0.8 }
+
+# =============================================================================
+# SUBTYPE SUMMARY — Every position has a unique identity
+# =============================================================================
+
+subtype_registry:
+  objective:      { node_type: Narrative, source: OBJECTIVES, role: "pull force (what we want)" }
+  behavior:       { node_type: Moment,    source: BEHAVIORS,  role: "observable prediction (GIVEN/WHEN/THEN)" }
+  algorithm:      { node_type: Narrative, source: ALGORITHM,  role: "procedure (step by step HOW)" }
+  data_structure: { node_type: Thing,     source: ALGORITHM,  role: "defined artifact (struct/schema)" }
+  code_file:      { node_type: Thing,     source: IMPLEMENTATION, role: "source file with EvidenceRef" }
+  code_function:  { node_type: Thing,     source: IMPLEMENTATION, role: "function/class within a file" }
+  invariant:      { node_type: Narrative, source: VALIDATION, role: "non-negotiable truth (MUST/NEVER)" }
+  health_check:   { node_type: Narrative, source: HEALTH,     role: "automated verification with action_command" }
+  module:         { node_type: Space,     source: "(directory)", role: "container for all of the above" }
+  pattern:        { node_type: Narrative, source: PATTERNS,   role: "design decision (why this shape)" }
+  sync_state:     { node_type: Moment,    source: SYNC,       role: "current state snapshot" }
+
+# =============================================================================
+# LINK TYPE SUMMARY — How positions relate
+# =============================================================================
+
+link_type_registry:
+  BELONGS_TO:  "node is contained in module space"
+  VALIDATES:   "behavior tests an objective"
+  IMPLEMENTS:  "algorithm/code implements a behavior or algorithm"
+  CONSTRAINS:  "invariant governs a behavior"
+  VERIFIES:    "health check tests an invariant"
+  IN:          "file is inside a module space"
+  REFERENCES:  "doc references code (bidirectional pointer)"
