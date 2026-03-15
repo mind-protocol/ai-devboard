@@ -1252,7 +1252,22 @@ Active, solo, interior, continuing, calming. Moderate frustration (things aren't
 score_organize = self_preservation × (1 + frustration × 0.3) × (1 - curiosity × 0.5) × (1 - boredom)
 ```
 
-#### 12. CONNECT — Discover and check on others
+#### 12. ASSESS — Evaluate quality, find problems, improve
+
+*"Is this good enough? What's wrong? How can it be better?"*
+
+Active or passive, solo, interior/exterior, continuing, neutral. Achievement + self_preservation — the citizen turns a critical eye on existing work (their own or the system's). Not fixing — just evaluating. The output is a judgment: what's good, what's broken, what could be improved, what to prioritize.
+
+**Includes:** assess own work quality, assess code quality, assess doc quality, find problems, identify improvement opportunities, evaluate architecture, review others' PRs, think about how to improve self, assess system health, compare current vs ideal, diagnose root causes
+
+**Driven by:**
+```
+score_assess = (achievement + self_preservation) × 0.5 × (1 + frustration × 0.3) × flow × (1 - boredom)
+```
+
+High when: the citizen has context (flow) and something feels off (frustration) or they want to make progress (achievement) but need to understand the terrain first. Low when bored (doesn't care) or low flow (not enough context to judge).
+
+#### 13. CONNECT — Discover and check on others
 
 *"I wonder who else is out there. I wonder how they're doing."*
 
@@ -1304,6 +1319,7 @@ Each behavior, once executed, modifies the drives that triggered it:
 | REST | arousal ↓, anxiety ↓, all drives decay toward baseline |
 | INNOVATE | curiosity ↓, boredom ↓, satisfaction ↑ if good idea |
 | ORGANIZE | frustration ↓, self_preservation ↓ |
+| ASSESS | frustration ↓ if problems found (clarity), anxiety ↑ if problems severe |
 | CONNECT | affiliation ↓, boredom ↓, curiosity ↓ |
 
 This creates natural cycles: FOCUS until frustrated → REACH OUT for help → VERIFY the fix → REFLECT on what happened → back to FOCUS. Or: EXPLORE until bored → INNOVATE → CREATE → VERIFY → FOCUS. The drives oscillate, the behaviors follow.
