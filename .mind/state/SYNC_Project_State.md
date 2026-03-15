@@ -2,7 +2,7 @@
 
 ```
 LAST_UPDATED: 2026-03-15
-UPDATED_BY: Tomaso Nervo (@nervo) — action-dispatch.js created (dispatchAction + shouldSubcallOracle)
+UPDATED_BY: Tomaso Nervo (@nervo) — full DevBoard + L2 tick + citizen autonomy
 ```
 
 ---
@@ -81,15 +81,29 @@ Parse repo → Space nodes (dirs), Thing nodes (files, functions with EvidenceRe
 - schema-l2.yaml — CANONICAL (full L2 subtype + link type catalog)
 - sentence-maker.js — CODED (13 cluster templates, drive modifiers, arousal prefix, desire append)
 - action-dispatch.js — CODED (cluster→action mapping, 3-tier autonomy gate, oracle subcall check)
+- L2 tick cycle (l2-tick.js) — LIVE (19 steps, 14 citizens, ~200ms/tick)
+- Behavior selection (7 modules) — LIVE (citizen-state, behavior-scorer, target-selector, sentence-maker, task-continuity, action-dispatch, l2-tick)
+- DevBoard frontend — LIVE (Graph + Nodes + Brains views, SSE, citizen panel)
+- Dispatch (dispatch.js) — LIVE (direct citizen invocation via claude --print)
+- Mention-watcher — LIVE (watches repos for @handles, wakes citizens, appends responses)
+- File watcher (watcher.js) — CODED (file changes → graph stimuli)
+- Ingestion pipeline (ingest.js) — LIVE (8 phases, 1963 nodes, 2419 links)
+- POST /api/message — LIVE (HTTP dispatch, async response)
+- POST /api/autotick — LIVE (background tick loop)
+- GET /api/brains — LIVE (48 L1 brains, expand on click)
+- GET /api/dashboard — LIVE (citizen state with L2 connections)
+- seed-drives.js — RUN (14 citizens × 8 drives = 112 unique State nodes)
+- start-services.sh / stop-services.sh — process manager
+- 14 citizen team — ACTIVE (8 arsenal + 6 original)
 
 ---
 
 ## WHAT'S MISSING
 
-**Immediate:** reindex embeddings, vector subcall test, repo ingestion
-**High:** SSE stream, vertical membrane ($MIND), Law 17 dispatch, subconscious mode, voice
-**Medium:** CLIP backend, birth template, room navigation, Blood Ledger
-**Later:** 3D mode, VR, spatial audio, custom senses
+**Immediate:** reindex embeddings (JSON→vecf32), vector subcall test
+**High:** vertical membrane ($MIND flow), Law 17 desire dispatch, voice pipeline, real tool execution in action-dispatch
+**Medium:** CLIP backend, birth template, room navigation, Blood Ledger, autonomy tiers (Andrea's 4-tier model)
+**Later:** 3D mode, VR, spatial audio, custom senses, sleepcode (subconscious action execution)
 
 ---
 
