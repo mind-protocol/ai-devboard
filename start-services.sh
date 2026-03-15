@@ -33,3 +33,7 @@ echo "  Server:   tail -f /tmp/devboard-server.log"
 echo "  Watcher:  tail -f /tmp/devboard-watcher.log"
 echo "  Mentions: tail -f /tmp/devboard-mentions.log"
 echo "  Vite:     tail -f /tmp/devboard-vite.log"
+
+# Start swarm driver
+node swarm.js --interval 60 > /tmp/devboard-swarm.log 2>&1 &
+echo "  Swarm driver: PID $! (task dispatch every 60s)"
