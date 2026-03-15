@@ -98,6 +98,16 @@ async function onFileChanged(redis, relPath, eventType) {
 
   const queries = []
 
+  // Create a Moment for significant file events
+  const momentId = `moment:filechange:${slugify(relPath)}_${now}`
+  queries.push(
+    `MERGE (m:Moment {id: '${esc(momentId)}'}) SET m.name = '${esc(eventType + ': ' + relPath)}', m.type = 'file_event', m.subtype = '${eventType}', m.content = '${esc(relPath)}', m.energy = 0.3, m.weight = 0.4, m.stability = 0.3, m.created_at_s = ${now}`
+  )
+  // Link moment to the file
+  queries.push(
+    `MATCH (m:Moment {id: '${esc(momentId)}'}), (f:Thing {id: '${esc(fileId)}'}) MERGE (m)-[r:link]->(f) SET r.r_type = 'AFFECTS', r.hierarchy = -0.2, r.trust = 0.9, r.weight = 0.5`
+  )
+
   if (eventType === 'rename') {
     // File created or deleted — check if it exists
     try {

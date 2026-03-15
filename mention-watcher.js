@@ -156,6 +156,25 @@ async function wakeCitizen(redis, handle, context, sourceFile, mentionedBy) {
         ])
       } catch (_) {}
 
+      // Store response as Moment in L2
+      try {
+        const respId = `moment:mention_resp:${handle}_${nowS}`
+        await redis.sendCommand(['GRAPH.QUERY', GRAPH,
+          `MERGE (m:Moment {id: '${esc(respId)}'}) SET m.name = '${esc(response.slice(0, 120))}', m.type = 'mention_resp', m.subtype = 'dialogue', m.content = '${esc(response.slice(0, 2000))}', m.energy = 0.6, m.weight = 0.6, m.origin_citizen = '${handle}', m.target_citizen = '${mentionedBy}', m.status = 'delivered', m.created_at_s = ${nowS + 1}`
+        ])
+        // CREATED link from citizen
+        await redis.sendCommand(['GRAPH.QUERY', GRAPH,
+          `MATCH (m:Moment {id: '${esc(respId)}'}), (a:Actor {id: 'citizen:${handle}'}) MERGE (a)-[r:link]->(m) SET r.r_type = 'CREATED', r.trust = 0.9, r.weight = 0.8`
+        ])
+      } catch (_) {}
+
+      // Also link the original mention moment to the citizen who created it
+      try {
+        await redis.sendCommand(['GRAPH.QUERY', GRAPH,
+          `MATCH (m:Moment {id: '${esc(momentId)}'}), (a:Actor {id: 'citizen:${mentionedBy}'}) MERGE (a)-[r:link]->(m) SET r.r_type = 'CREATED', r.trust = 0.9, r.weight = 0.8`
+        ])
+      } catch (_) {}
+
       // Append response to source file
       try {
         const { appendFile } = await import('fs/promises')

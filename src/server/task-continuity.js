@@ -147,6 +147,13 @@ export async function resolveTask(redis, graph, citizenState, selectedCluster, s
 
   await redis.sendCommand(['GRAPH.QUERY', graph, claimedByQuery]);
 
+  // Create CREATED link: citizen → task (provenance — the citizen initiated this)
+  const createdByQuery = `
+    MATCH (t:Moment {id: '${safeTaskId}'}), (c {id: '${citizenId}'})
+    MERGE (c)-[r:link]->(t) SET r.r_type = 'CREATED', r.trust = 0.9, r.weight = 0.7
+  `;
+  await redis.sendCommand(['GRAPH.QUERY', graph, createdByQuery]);
+
   // If target exists: create AFFECTS link: task → target
   if (selectedTarget && selectedTarget.id) {
     const safeTargetId = String(selectedTarget.id).replace(/'/g, "\\'");
