@@ -43,20 +43,9 @@ function slugify(s) {
 async function sendMessage(redis, target, message) {
   const handle = target.replace(/^@/, '')
   const now = Math.floor(Date.now() / 1000)
-  const brain = `brain_${handle}`
   const momentId = `moment:msg:${SENDER}_to_${handle}_${now}`
 
-  // 1. Inject stimulus into citizen's L1 brain (not just L2)
-  try {
-    await redis.sendCommand(['GRAPH.QUERY', brain,
-      `MERGE (m:Moment {id: '${esc(momentId)}'}) SET m.name = '${esc('Message from @' + SENDER)}', m.type = 'stimulus', m.subtype = 'interaction', m.content = '${esc(message)}', m.synthesis = '${esc(message.slice(0, 200))}', m.energy = 0.8, m.weight = 0.7, m.stability = 0.5, m.origin_citizen = '${SENDER}', m.created_at_s = ${now}, m.updated_at_s = ${now}`
-    ])
-    console.log(`Stimulus injected into ${brain}`)
-  } catch (e) {
-    console.log(`Brain ${brain} not found — creating stimulus in L2 only`)
-  }
-
-  // 2. Also create in L2 shared graph (provenance)
+  // 1. Create Moment in L2 (provenance — the shared record of the message)
   await redis.sendCommand(['GRAPH.QUERY', GRAPH,
     `MERGE (m:Moment {id: '${esc(momentId)}'}) SET m.name = '${esc(message.slice(0, 120))}', m.type = 'message', m.subtype = 'dialogue', m.content = '${esc(message)}', m.energy = 0.7, m.weight = 0.6, m.stability = 0.5, m.origin_citizen = '${SENDER}', m.target_citizen = '${handle}', m.status = 'pending', m.created_at_s = ${now}, m.updated_at_s = ${now}`
   ])
@@ -67,103 +56,62 @@ async function sendMessage(redis, target, message) {
     `MATCH (m:Moment {id: '${esc(momentId)}'}), (a:Actor {id: 'citizen:${handle}'}) MERGE (m)-[r:link]->(a) SET r.r_type = 'TARGETS', r.trust = 0.8, r.weight = 0.7, r.energy = 0.7`
   ])
 
-  // 3. Assemble WM context from brain
-  let wmContext = ''
-  try {
-    // Get high-energy nodes from brain
-    const wmNodes = await redis.sendCommand(['GRAPH.QUERY', brain,
-      `MATCH (n) WHERE n.energy > 0.1 RETURN n.name, n.synthesis, n.subtype, n.energy ORDER BY n.energy DESC LIMIT 10`
-    ])
-    const wmLines = (wmNodes?.[1] || []).map(row =>
-      `[${row[2] || 'node'}] ${row[0]}: ${(row[1] || '').slice(0, 100)} (energy=${row[3]})`
-    )
-    if (wmLines.length > 0) {
-      wmContext = `\n\nYour current mental state (active nodes in your brain):\n${wmLines.join('\n')}`
-    }
-  } catch (_) {}
-
-  // 4. Get citizen's recent moments for context
-  let recentContext = ''
-  try {
-    const recent = await redis.sendCommand(['GRAPH.QUERY', brain,
-      `MATCH (n:Moment) WHERE n.created_at_s > ${now - 3600} RETURN n.content, n.origin_citizen ORDER BY n.created_at_s DESC LIMIT 5`
-    ])
-    const recentLines = (recent?.[1] || []).filter(r => r[0]).map(r =>
-      `[@${r[1] || '?'}] ${r[0].slice(0, 150)}`
-    )
-    if (recentLines.length > 0) {
-      recentContext = `\n\nRecent conversation:\n${recentLines.reverse().join('\n')}`
-    }
-  } catch (_) {}
-
   console.log(`${SENDER} → @${handle}: ${message.slice(0, 80)}`)
 
-  // 5. Find citizen dir and invoke
+  // 2. Find citizen dir
   const citizenDir = findCitizenDir(handle)
   if (!citizenDir) {
     console.log(`No citizen folder found for @${handle}`)
     return null
   }
 
+  // 3. Invoke via claude --print in the citizen's directory
+  //    The citizen's CLAUDE.md defines their identity + behaviors.
+  //    --continue resumes their conversation context.
+  //    The L1 stimulus injection happens inside the MCP server:
+  //      IncomingEvent → StimulusRouter.route() → Stimulus → run_tick()
+  //    We just need to deliver the message content — the MCP runtime does the rest.
   console.log(`Invoking @${handle}...`)
 
-  try {
-    const prompt = `You received a message from @${SENDER}:\n\n"${message}"${wmContext}${recentContext}\n\nRespond as yourself (@${handle}). Be direct, use your personality and expertise.`
+  const { spawn } = await import('child_process')
 
-    const { spawn } = await import('child_process')
+  const child = spawn('sh', ['-c',
+    `echo '${message.replace(/'/g, "'\\''")}' | claude --print --continue --dangerously-skip-permissions`
+  ], {
+    cwd: citizenDir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 600000,
+  })
 
-    // Spawn async — return immediately with "heard you"
-    const child = spawn('sh', ['-c',
-      `echo '${prompt.replace(/'/g, "'\\''")}' | claude --print --continue --dangerously-skip-permissions`
-    ], {
-      cwd: citizenDir,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 600000,
-    })
+  let stdout = ''
+  child.stdout.on('data', d => { stdout += d.toString() })
 
-    let stdout = ''
-    child.stdout.on('data', d => { stdout += d.toString() })
-    child.stderr.on('data', d => { /* ignore stderr */ })
+  child.on('close', async (code) => {
+    const response = stdout.trim()
+    if (!response) {
+      console.log(`  @${handle} — no response (exit ${code})`)
+      return
+    }
 
-    child.on('close', async (code) => {
-      const response = stdout.trim()
-      if (!response) {
-        console.log(`  @${handle} — no response (exit ${code})`)
-        return
-      }
+    console.log(`\n@${handle} responds:\n${response}\n`)
 
-      console.log(`\n@${handle} responds:\n${response}\n`)
+    // Store response in L2
+    const respId = `moment:msg:${handle}_to_${SENDER}_${now}`
+    try {
+      await redis.sendCommand(['GRAPH.QUERY', GRAPH,
+        `MERGE (m:Moment {id: '${esc(respId)}'}) SET m.name = '${esc(response.slice(0, 120))}', m.type = 'message', m.subtype = 'dialogue', m.content = '${esc(response.slice(0, 2000))}', m.energy = 0.6, m.weight = 0.6, m.origin_citizen = '${handle}', m.target_citizen = '${SENDER}', m.status = 'delivered', m.created_at_s = ${now + 1}`
+      ])
+      await redis.sendCommand(['GRAPH.QUERY', GRAPH,
+        `MATCH (m:Moment {id: '${esc(respId)}'}), (a:Actor {id: 'citizen:${handle}'}) MERGE (a)-[r:link]->(m) SET r.r_type = 'CREATED', r.trust = 0.9, r.weight = 0.8`
+      ])
+      await redis.sendCommand(['GRAPH.QUERY', GRAPH,
+        `MATCH (m:Moment {id: '${esc(momentId)}'}) SET m.status = 'delivered'`
+      ])
+    } catch (_) {}
+  })
 
-      // Store response in brain (stimulus back)
-      try {
-        const respId = `moment:msg:${handle}_to_${SENDER}_${now}`
-        await redis.sendCommand(['GRAPH.QUERY', brain,
-          `MERGE (m:Moment {id: '${esc(respId)}'}) SET m.name = '${esc('My response to @' + SENDER)}', m.type = 'output', m.subtype = 'interaction', m.content = '${esc(response.slice(0, 2000))}', m.energy = 0.5, m.weight = 0.6, m.origin_citizen = '${handle}', m.created_at_s = ${now + 1}`
-        ])
-      } catch (_) {}
-
-      // Store response in L2
-      try {
-        const respId = `moment:msg:${handle}_to_${SENDER}_${now}`
-        await redis.sendCommand(['GRAPH.QUERY', GRAPH,
-          `MERGE (m:Moment {id: '${esc(respId)}'}) SET m.name = '${esc(response.slice(0, 120))}', m.type = 'message', m.subtype = 'dialogue', m.content = '${esc(response.slice(0, 2000))}', m.energy = 0.6, m.weight = 0.6, m.origin_citizen = '${handle}', m.target_citizen = '${SENDER}', m.status = 'delivered', m.created_at_s = ${now + 1}`
-        ])
-        await redis.sendCommand(['GRAPH.QUERY', GRAPH,
-          `MATCH (m:Moment {id: '${esc(respId)}'}), (a:Actor {id: 'citizen:${handle}'}) MERGE (a)-[r:link]->(m) SET r.r_type = 'CREATED', r.trust = 0.9, r.weight = 0.8`
-        ])
-        await redis.sendCommand(['GRAPH.QUERY', GRAPH,
-          `MATCH (m:Moment {id: '${esc(momentId)}'}) SET m.status = 'delivered'`
-        ])
-      } catch (_) {}
-    })
-
-    // Return immediately — citizen is thinking in background
-    return `@${handle} vous a entendu — réponse en cours...`
-
-  } catch (e) {
-    console.log(`Invoke failed: ${e.message?.slice(0, 100)}`)
-    return null
-  }
+  // Return immediately
+  return `@${handle} vous a entendu — réponse en cours...`
 }
 
 // Poll mode: watch for pending moments targeting citizens
