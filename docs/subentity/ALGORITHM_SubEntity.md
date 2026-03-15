@@ -845,6 +845,164 @@ When Phase 0 runs, it reads `r.condition` and `r.condition_target`, evaluates th
 
 ---
 
+## L2 TICK CYCLE (Collective Heartbeat)
+
+The L2 tick is the heartbeat of the shared world. Where L1 tick runs per-citizen (private cognition), L2 tick runs once for the whole graph (collective physics). Each L2 step mirrors an L1 law but operates on shared structure.
+
+```yaml
+l2_tick_cycle:
+  steps:
+    # --- Sensing ---
+    1:  { l1_mirror: L21, action: "MEMBRANE_DOWN — L2 active nodes → L1 stimuli for all linked citizens" }
+    2:  { l1_mirror: L1,  action: "INJECT — watcher stimuli (file changes, new nodes) → energy into L2 graph" }
+
+    # --- Physics ---
+    3:  { l1_mirror: L2,  action: "PROPAGATE — energy flows through L2 links (weight × trust gating)" }
+    4:  { l1_mirror: L3,  action: "DECAY — energy decays on all L2 nodes (rate=0.02)" }
+    5:  { l1_mirror: L5,  action: "REINFORCE — co-active L2 nodes strengthen their links" }
+    6:  { l1_mirror: L6,  action: "CONSOLIDATE — high-traffic L2 links gain weight (every Nth tick)" }
+    7:  { l1_mirror: L7,  action: "FORGET — unused L2 nodes/links decay, sub-threshold pruned" }
+    8:  { l1_mirror: L10, action: "CRYSTALLIZE — dense task/node clusters merge into hub nodes" }
+
+    # --- Task Engine ---
+    9:  { action: "TASK_SCAN — detect new tasks from graph state (TODO, empty fn, broken IMPL, etc.)" }
+    10: { action: "TASK_VERIFY — Phase 0: check exit conditions on all pending tasks, auto-resolve" }
+    11: { action: "TASK_ASSIGN — route pending tasks to best-fit citizens via select_best_agent()" }
+    12: { action: "TASK_PROMOTE — throttler: claimed → running if citizen has capacity" }
+
+    # --- Citizen Aggregate ---
+    13: { action: "CITIZEN_AGGREGATE — recompute each citizen's L2 properties from their L1 SubEntities" }
+    14: { action: "MEMBRANE_UP — citizens' high-energy L1 nodes project to L2 (new nodes, link boosts)" }
+
+    # --- Action Dispatch ---
+    15: { action: "SUBCONSCIOUS_STEP — for each sleeping citizen: step their active SubEntities" }
+    16: { action: "ACTION_DISPATCH — execute autonomous actions from SubEntities in CRYSTALLIZING state" }
+    17: { action: "RESULT_FEEDBACK — action results → L1 stimuli → drive updates" }
+
+    # --- Output ---
+    18: { action: "SSE_EMIT — push graph deltas to connected DevBoard clients" }
+    19: { action: "SYNC_WRITE — if significant changes, update SYNC docs" }
+
+  timing:
+    active_tick: "5s (DevBoard open, human interacting)"
+    background_tick: "30s (server running, no human)"
+    idle_tick: "300s (no activity, maintenance only)"
+    forgetting_cycle: "every 100 L2 ticks"
+    crystallization_check: "every 50 L2 ticks"
+    consolidation_cycle: "every 50 L2 ticks"
+```
+
+### L1 vs L2 Tick Comparison
+
+| Step | L1 (Private Brain) | L2 (Shared World) |
+|------|-------------------|-------------------|
+| Inject | External stimuli → L1 energy | Watcher stimuli → L2 energy |
+| Propagate | Links within one brain | Links across the shared graph |
+| Decay | Private nodes lose energy | Shared nodes lose energy |
+| Compete | Salience → Working Memory | (no WM at L2 — citizens have their own) |
+| Reinforce | Co-activation in one brain | Co-activation across citizens |
+| Consolidate | Personal learning | Collective pattern recognition |
+| Forget | Personal forgetting | Collective forgetting (dead tasks, stale nodes) |
+| Crystallize | Personal insight → new node | Collective pattern → hub task |
+| Desire check | Personal desire activation | Task scan (system-level desires) |
+| Boredom | Personal stagnation | (handled per-citizen in L1) |
+| Frustration | Personal blockage | (handled per-citizen in L1) |
+| Orient | WM → decision | Task assign → citizen selection |
+| Emit | Citizen speaks/writes | SSE emit + SYNC write |
+| Consume | Action depletes drive | Task done → energy drops to 0 |
+| **NEW at L2** | — | Membrane down/up, citizen aggregate, subconscious dispatch |
+
+Note: L2 has no L4 (attentional competition), L9 (inhibition), L11 (orientation), L13 (inertia), L14 (limbic modulation), L15 (boredom), L16 (frustration). These are L1-only — the shared world has no attention, no emotions, no boredom. Citizens bring those when they act on L2.
+
+---
+
+## L2 BEHAVIOR STATE MACHINE (Complete Action Vocabulary)
+
+Every action a citizen can take at L2 — whether awake or asleep — falls into one of these categories. This is the exhaustive list.
+
+### THINK (internal, no side effects)
+
+| Action | Tool | When | Side Effects |
+|--------|------|------|--------------|
+| Reflect | `think` | SubEntity in REFLECTING | Creates Narrative node in L1 |
+| Plan | `think` | SubEntity in CRYSTALLIZING | Creates Narrative(subtype=plan) in L1 |
+| Evaluate | `think` | Before any guarded action | Updates L1 competence/anxiety state |
+| Remember | (automatic) | Law 6 consolidation | Strengthens L1 links |
+| Forget | (automatic) | Law 7 | Weakens/prunes L1 links |
+| Dream | (automatic) | Subconscious tick, Law 19 | SubEntity explores L1 memory |
+| Change opinion | (automatic) | L1 crystallization (Law 10) | New Narrative replaces old one |
+| Update desire | (automatic) | L1 desire activation (Law 17) | Desire energy changes |
+
+### READ (no side effects on the world)
+
+| Action | Tool | When | Side Effects |
+|--------|------|------|--------------|
+| Read file | `read_file` | SEEKING/ABSORBING | Stimulus injected into L1 |
+| Read doc | `read_file` | SEEKING — doc chain navigation | Stimulus injected into L1 |
+| Query graph | `graph_query` | SEEKING — exploring structure | Returns nodes/links as stimuli |
+| Search code | `grep` / `glob` | SEEKING — finding references | Results as stimuli |
+| Read test results | `bash` (read-only) | After test run | Pass/fail as stimulus |
+| Read git log | `bash` (read-only) | Context assembly | History as stimulus |
+| Read SYNC | `read_file` | Context assembly | Current state as stimulus |
+
+### WRITE (modifies the world — guarded or autonomous)
+
+| Action | Tool | Autonomy | When | Side Effects |
+|--------|------|----------|------|--------------|
+| Write code | `write_file` | guarded | CRYSTALLIZING — implementing | File created/modified, watcher fires |
+| Write doc | `write_file` | guarded | CRYSTALLIZING — doc sync | Doc updated, watcher fires |
+| Write test | `write_file` | guarded | CRYSTALLIZING — test coverage | Test file created |
+| Update SYNC | `write_file` | autonomous | MERGING — recording work | SYNC doc updated |
+| Create file | `write_file` | guarded | Missing IMPL target | New skeleton, watcher fires |
+| Fix code | `edit_file` | guarded | CRYSTALLIZING — fixing bug | File modified, watcher fires |
+
+### COMMUNICATE (affects other citizens)
+
+| Action | Tool | Autonomy | When | Side Effects |
+|--------|------|----------|------|--------------|
+| Subcall | `subcall` | autonomous | RESONATING — needs expertise | L2 Moment created, target citizen stimulated |
+| Post to channel | `speak` | guarded | MERGING — sharing results | Message visible to team |
+| Respond to subcall | `subcall` (response) | autonomous | Incoming stimulus | L2 Moment with response |
+| Phone call | `subcall(target=citizen)` | guarded | RESONATING — urgent need | Direct citizen-to-citizen stimulus |
+
+### VERIFY (checks truth)
+
+| Action | Tool | Autonomy | When | Side Effects |
+|--------|------|----------|------|--------------|
+| Run test | `bash` | autonomous | After WRITE | Pass/fail stimulus |
+| Run build | `bash` | autonomous | After WRITE | Build OK/error stimulus |
+| Run lint | `bash` | autonomous | After WRITE | Lint result stimulus |
+| Check exit condition | (automatic) | autonomous | Phase 0 every tick | Task resolved if met |
+| Compare to spec | `read_file` + `think` | autonomous | REFLECTING | Match/mismatch stimulus |
+
+### DECIDE (changes direction)
+
+| Action | Trigger | Result |
+|--------|---------|--------|
+| Accept task | Assignment engine | Status: claimed, energy directed |
+| Reject task | Low competence match | Task returns to pending |
+| Escalate | Frustration > threshold | Task severity increased, reassigned |
+| Abandon | Fatigue counter > 5 | Task unclaimed, energy += 0.3 |
+| Branch | Multiple high-scoring paths | Spawn sibling SubEntities |
+| Merge | SubEntity reaches MERGING | Crystallization absorbed by parent |
+| Wait | No action meets threshold | Energy decays, next tick re-evaluates |
+| Change strategy | Frustration + reflection | New process node activated in L1 |
+
+### NEVER (human_required)
+
+| Action | Why |
+|--------|-----|
+| `git commit` | Irreversible history change |
+| `git push` | Affects shared remote |
+| `git reset --hard` | Destructive |
+| `rm -rf` | Destructive |
+| Deploy | Production impact |
+| Create PR | Public-facing action |
+| Close issue | External system state |
+| Send email | External communication |
+
+---
+
 ## ALGORITHM: Backlog Management (Metabolism)
 
 The backlog is not a list. It is the set of all task_run nodes with `status=pending` in the graph. It is managed by physics, not by a human sorting tickets.
