@@ -1,6 +1,8 @@
 import express from 'express'
 import { createClient } from 'redis'
 import { runL2Tick } from './src/server/l2-tick.js'
+import { getCitizenState } from './src/server/citizen-state.js'
+import { scoreBehaviors, applyEmotionalBias } from './src/server/behavior-scorer.js'
 
 const app = express()
 app.use(express.json())
@@ -147,13 +149,34 @@ app.post('/api/tick', async (req, res) => {
   }
 })
 
+// List all nodes in a graph (returns raw properties, not parsed through parseGraphResult)
+app.get('/api/nodes/:graph', async (req, res) => {
+  const { graph } = req.params
+  const limit = Math.min(parseInt(req.query.limit) || 500, 5000)
+  const since = parseInt(req.query.since) || 0 // epoch seconds — filter by updated_at_s or created_at_s
+  try {
+    const whereClause = since > 0
+      ? `WHERE (n.updated_at_s IS NOT NULL AND n.updated_at_s >= ${since}) OR (n.created_at_s IS NOT NULL AND n.created_at_s >= ${since})`
+      : ''
+    const raw = await redis.sendCommand(['GRAPH.QUERY', graph,
+      `MATCH (n) ${whereClause} RETURN labels(n)[0] AS type, n.id AS id, n.name AS name, n.subtype AS subtype, n.energy AS energy, n.weight AS weight, n.status AS status, n.synthesis AS synthesis, n.origin_citizen AS origin, n.source_file AS source, n.created_at_s AS created, n.updated_at_s AS updated, n.stability AS stability, n.friction AS friction, n.content AS content ORDER BY n.energy DESC LIMIT ${limit}`])
+    const rows = (raw?.[1] || []).map(row => ({
+      type: row[0], id: row[1], name: row[2] || row[1],
+      subtype: row[3] || '', energy: parseFloat(row[4]) || 0, weight: parseFloat(row[5]) || 0,
+      status: row[6] || '', synthesis: row[7] || '', origin: row[8] || '',
+      source: row[9] || '', created: row[10] || null, updated: row[11] || null,
+      stability: parseFloat(row[12]) || 0, friction: parseFloat(row[13]) || 0,
+      content: row[14] || '',
+      label: row[0],
+    }))
+    res.json(rows)
+  } catch (e) { res.json([]) }
+})
+
 // Citizen status — current state of all citizens
 app.get('/api/citizens/:graph', async (req, res) => {
   const { graph } = req.params
   try {
-    const { getCitizenState } = await import('./src/server/citizen-state.js')
-    const { scoreBehaviors, applyEmotionalBias } = await import('./src/server/behavior-scorer.js')
-
     // Get all citizen IDs
     const idRes = await redis.sendCommand(['GRAPH.QUERY', graph,
       `MATCH (a:Actor) WHERE NOT a.id STARTS WITH 'org:' RETURN a.id, a.name`])

@@ -60,6 +60,40 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
 .citizen-sentence { color: #888; font-style: italic; }
 .citizen-action { color: #4ade80; font-family: monospace; }
 .status { color: #888; font-size: 12px; white-space: nowrap; }
+.view-tabs { display: flex; gap: 2px; }
+.view-tabs button {
+  background: #222; color: #aaa; border: 1px solid #444; padding: 3px 10px;
+  border-radius: 3px; cursor: pointer; font-size: 11px;
+}
+.view-tabs button.active { background: #3b82f6; color: white; border-color: #3b82f6; }
 .legend { display: flex; gap: 10px; font-size: 12px; margin-left: auto; }
+.node-list {
+  flex: 1; overflow: auto; background: #0a0a0a; padding: 0;
+}
+.node-list table {
+  width: 100%; border-collapse: collapse; font-size: 12px; font-family: monospace;
+}
+.node-list thead { position: sticky; top: 0; background: #1a1a1a; z-index: 5; }
+.node-list th {
+  text-align: left; padding: 6px 8px; border-bottom: 1px solid #333;
+  color: #888; font-weight: normal; text-transform: uppercase; font-size: 10px;
+}
+.node-list td { padding: 4px 8px; border-bottom: 1px solid #1a1a1a; }
+.node-list tr:hover { background: #1a1a2a; }
+.type-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 3px;
+  color: white; font-size: 10px; font-weight: bold;
+}
+.col-graph { color: #555; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.col-subtype { color: #888; }
+.col-name { color: #eee; max-width: 400px; overflow: hidden; text-overflow: ellipsis; }
+.col-num { color: #4ade80; text-align: right; font-variant-numeric: tabular-nums; }
+.col-friction { color: #f87171; }
+.col-content { color: #666; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-status { color: #fbbf24; font-size: 10px; }
+.col-origin { color: #818cf8; font-size: 10px; }
+.col-source { color: #555; font-size: 10px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.col-time { color: #555; font-size: 10px; white-space: nowrap; }
+.col-score { color: #fbbf24; white-space: nowrap; font-size: 11px; }
 svg { flex: 1; cursor: grab; }
 svg:active { cursor: grabbing; }

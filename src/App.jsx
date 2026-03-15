@@ -10,9 +10,24 @@ const COLORS = {
   Thing: '#10b981',
 }
 
+// Node health score: 0-5 stars
+// Good = high stability, reasonable weight, low friction, some energy
+// Bad = low stability, high friction, no energy, pending status
+function starScore(n) {
+  const stability = Math.min(n.stability || 0, 1)
+  const hasWeight = Math.min((n.weight || 0) / 2, 1) // normalize: weight 2+ = max
+  const lowFriction = 1 - Math.min(n.friction || 0, 1)
+  const hasEnergy = Math.min((n.energy || 0) * 5, 1) // even 0.2 energy = alive
+  const notPending = n.status === 'pending' ? 0.3 : n.status === 'done' ? 1 : 0.7
+
+  const raw = (stability * 0.3 + hasWeight * 0.2 + lowFriction * 0.2 + hasEnergy * 0.15 + notPending * 0.15)
+  const stars = Math.round(raw * 5)
+  return ['', '★', '★★', '★★★', '★★★★', '★★★★★'][stars] || ''
+}
+
 function App() {
   const svgRef = useRef()
-  const [graphName, setGraphName] = useState('org_ai_dev_dashboard')
+  const [graphName, setGraphName] = useState('lumina_prime')
   const [query, setQuery] = useState('MATCH (n)-[r]->(m) RETURN n, r, m')
   const [graphs, setGraphs] = useState([])
   const [status, setStatus] = useState('Ready')
@@ -20,12 +35,17 @@ function App() {
   const [streaming, setStreaming] = useState(false)
   const [citizens, setCitizens] = useState([])
   const [useL2, setUseL2] = useState(false)
+  const [view, setView] = useState('nodes') // 'graph' | 'nodes'
+  const [nodeList, setNodeList] = useState([])
+  const [timeFilter, setTimeFilter] = useState(10) // minutes
   const tickRef = useRef(null)
   const sseRef = useRef(null)
   const simRef = useRef(null) // hold D3 simulation for live updates
 
   useEffect(() => {
     fetch('/api/graphs').then(r => r.json()).then(setGraphs).catch(() => {})
+    // Auto-load graph on mount
+    runQuery()
   }, [])
 
   // SSE stream — subscribe to graph deltas
@@ -81,6 +101,37 @@ function App() {
       }
       if (!streaming) runQuery()
     } catch (e) { setStatus(`Tick error: ${e.message}`) }
+  }
+
+  const loadNodeList = async () => {
+    setStatus('Loading node list...')
+    try {
+      // Load current graph first, then others in background
+      const allNodes = []
+      // Always load current graph
+      const since = timeFilter > 0 ? Math.floor(Date.now() / 1000) - (timeFilter * 60) : 0
+      try {
+        const res = await fetch(`/api/nodes/${graphName}?limit=2000&since=${since}`)
+        const nodes = await res.json()
+        if (Array.isArray(nodes)) for (const n of nodes) allNodes.push({ ...n, graph: graphName })
+      } catch (_) {}
+      setNodeList([...allNodes])
+      setStatus(`${allNodes.length} nodes from ${graphName}`)
+
+      // Then load other graphs in parallel
+      const otherGraphs = (graphs.length > 0 ? graphs : [])
+        .filter(g => g !== graphName && !g.startsWith('brain_') && !g.startsWith('test') && g !== '_health_check')
+        .slice(0, 20) // cap at 20 graphs
+      const fetches = otherGraphs.map(g =>
+        fetch(`/api/nodes/${g}?limit=500&since=${since}`).then(r => r.json()).then(nodes => {
+          if (Array.isArray(nodes)) for (const n of nodes) allNodes.push({ ...n, graph: g })
+        }).catch(() => {})
+      )
+      await Promise.all(fetches)
+      allNodes.sort((a, b) => (b.energy || 0) - (a.energy || 0))
+      setNodeList(allNodes)
+      setStatus(`${allNodes.length} nodes across ${graphList.length} graphs`)
+    } catch (e) { setStatus(`Error: ${e.message}`) }
   }
 
   const runQuery = async () => {
@@ -169,6 +220,18 @@ function App() {
         </div>
         <button className={`l2-toggle ${useL2 ? 'active' : ''}`}
           onClick={() => setUseL2(!useL2)}>{useL2 ? 'L2' : 'L1'}</button>
+        <div className="view-tabs">
+          <button className={view === 'graph' ? 'active' : ''} onClick={() => setView('graph')}>Graph</button>
+          <button className={view === 'nodes' ? 'active' : ''} onClick={() => { setView('nodes'); loadNodeList() }}>Nodes</button>
+          {view === 'nodes' && <>
+            {[10, 60, 1440, 0].map(m => (
+              <button key={m} className={timeFilter === m ? 'active' : ''}
+                onClick={() => { setTimeFilter(m); setTimeout(loadNodeList, 50) }}>
+                {m === 0 ? 'All' : m < 60 ? `${m}m` : m < 1440 ? `${m/60}h` : '24h'}
+              </button>
+            ))}
+          </>}
+        </div>
         <span className={`stream-indicator ${streaming ? 'live' : 'off'}`}>
           {streaming ? 'SSE LIVE' : 'SSE OFF'}
         </span>
@@ -189,7 +252,51 @@ function App() {
           ))}
         </div>
       )}
-      <svg ref={svgRef} width="100%" height="100%" />
+      {view === 'graph' && <svg ref={svgRef} width="100%" height="100%" />}
+      {view === 'nodes' && (
+        <div className="node-list">
+          <table>
+            <thead>
+              <tr>
+                <th>Score</th>
+                <th>Graph</th>
+                <th>Type</th>
+                <th>Subtype</th>
+                <th>Name</th>
+                <th>Content</th>
+                <th>E</th>
+                <th>W</th>
+                <th>S</th>
+                <th>F</th>
+                <th>Status</th>
+                <th>Origin</th>
+                <th>Source</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {nodeList.map((n, i) => (
+                <tr key={i} className={`node-row type-${(n.label || '').toLowerCase()}`}>
+                  <td className="col-score">{starScore(n)}</td>
+                  <td className="col-graph">{n.graph}</td>
+                  <td><span className="type-badge" style={{ background: COLORS[n.label] || '#666' }}>{n.label}</span></td>
+                  <td className="col-subtype">{n.subtype || ''}</td>
+                  <td className="col-name" title={n.id}>{n.name || n.id}</td>
+                  <td className="col-content" title={n.content || n.synthesis}>{(n.synthesis || n.content || '').slice(0, 60)}</td>
+                  <td className="col-num">{n.energy?.toFixed(2)}</td>
+                  <td className="col-num">{n.weight?.toFixed(1)}</td>
+                  <td className="col-num">{n.stability?.toFixed(2)}</td>
+                  <td className="col-num col-friction">{n.friction > 0 ? n.friction.toFixed(2) : ''}</td>
+                  <td className="col-status">{n.status || ''}</td>
+                  <td className="col-origin">{n.origin || ''}</td>
+                  <td className="col-source">{n.source || ''}</td>
+                  <td className="col-time">{n.updated ? new Date(n.updated * 1000).toLocaleTimeString() : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
