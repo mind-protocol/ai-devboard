@@ -1,5 +1,6 @@
 import express from 'express'
 import { createClient } from 'redis'
+import { runL2Tick } from './src/server/l2-tick.js'
 
 const app = express()
 app.use(express.json())
@@ -143,6 +144,32 @@ app.post('/api/tick', async (req, res) => {
     res.json(tickResult)
   } catch (e) {
     res.json({ error: e.message, decayed: 0, propagated: 0 })
+  }
+})
+
+// Run the full L2 tick cycle (19 steps + citizen behavior selection)
+app.post('/api/l2tick', async (req, res) => {
+  const { graph } = req.body
+  if (!graph) return res.json({ error: 'Missing graph' })
+
+  try {
+    const result = await runL2Tick(redis, graph)
+
+    // Emit via SSE if clients connected
+    if (sseClients.has(graph) && sseClients.get(graph).size > 0) {
+      try {
+        const raw = await redis.sendCommand(['GRAPH.QUERY', graph,
+          `MATCH (n)-[r]->(m) RETURN n, r, m`])
+        const fullGraph = parseGraphResult(raw)
+        sseEmit(graph, 'tick', { ...result, nodes: fullGraph.nodes, links: fullGraph.links })
+      } catch (_) {
+        sseEmit(graph, 'tick', result)
+      }
+    }
+
+    res.json(result)
+  } catch (e) {
+    res.json({ error: e.message })
   }
 })
 

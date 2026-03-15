@@ -2,7 +2,7 @@
 
 ```
 LAST_UPDATED: 2026-03-15
-UPDATED_BY: Tomaso Nervo (@nervo) — L2 conversion ruleset complete
+UPDATED_BY: Tomaso Nervo (@nervo) — action-dispatch.js created (dispatchAction + shouldSubcallOracle)
 ```
 
 ---
@@ -79,6 +79,8 @@ Parse repo → Space nodes (dirs), Thing nodes (files, functions with EvidenceRe
 - DevBoard prototype (Vite+D3) — PROTOTYPE
 - L2 Code Grammar conversion ruleset — CANONICAL (7 templates, 43 subtypes, 47 link r.types)
 - schema-l2.yaml — CANONICAL (full L2 subtype + link type catalog)
+- sentence-maker.js — CODED (13 cluster templates, drive modifiers, arousal prefix, desire append)
+- action-dispatch.js — CODED (cluster→action mapping, 3-tier autonomy gate, oracle subcall check)
 
 ---
 
