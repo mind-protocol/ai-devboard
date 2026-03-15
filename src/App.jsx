@@ -98,6 +98,11 @@ function App() {
   const [searchText, setSearchText] = useState('') // text search across fields
   const [expandedBrain, setExpandedBrain] = useState(null)
   const [expandedL2, setExpandedL2] = useState(null) // L2 connections for expanded brain
+  const [taskList, setTaskList] = useState([])
+  const [taskStatusFilter, setTaskStatusFilter] = useState(new Set(['pending', 'claimed', 'running'])) // default: active tasks
+  const [taskSortCol, setTaskSortCol] = useState('energy')
+  const [taskSortDir, setTaskSortDir] = useState(-1)
+  const [taskSearch, setTaskSearch] = useState('')
   const tickRef = useRef(null)
   const sseRef = useRef(null)
   const simRef = useRef(null) // hold D3 simulation for live updates
@@ -128,6 +133,20 @@ function App() {
         setBrainData(data)
         const total = data.reduce((s, b) => s + b.activeNodes, 0)
         setStatus(`${data.length} active brains, ${total} conscious nodes`)
+      }
+    } catch (e) { setStatus(`Error: ${e.message}`) }
+  }
+
+  const loadTasks = async () => {
+    setStatus('Loading tasks...')
+    try {
+      const res = await fetch(`/api/tasks/${graphName}`)
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        setTaskList(data)
+        const pending = data.filter(t => t.status === 'pending').length
+        const running = data.filter(t => t.status === 'running' || t.status === 'claimed').length
+        setStatus(`${data.length} tasks (${pending} pending, ${running} active)`)
       }
     } catch (e) { setStatus(`Error: ${e.message}`) }
   }
@@ -377,6 +396,58 @@ function App() {
     })
   })()
 
+  const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3, '': 4 }
+  const taskColumns = [
+    { key: 'severity', label: 'Sev', get: t => SEVERITY_ORDER[t.severity] ?? 4 },
+    { key: 'status', label: 'Status', get: t => t.status || '' },
+    { key: 'issueType', label: 'Issue Type', get: t => t.issueType || '' },
+    { key: 'name', label: 'Name', get: t => (t.name || '').toLowerCase() },
+    { key: 'exitCondition', label: 'Exit Condition', get: t => t.exitCondition || '' },
+    { key: 'exitTarget', label: 'Target', get: t => t.exitTarget || '' },
+    { key: 'claimedBy', label: 'Claimed', get: t => t.claimedBy || '' },
+    { key: 'energy', label: 'E', get: t => t.energy || 0 },
+    { key: 'weight', label: 'W', get: t => t.weight || 0 },
+    { key: 'friction', label: 'F', get: t => t.friction || 0 },
+    { key: 'updated', label: 'Updated', get: t => t.updated || 0 },
+  ]
+
+  const toggleTaskSort = (key) => {
+    if (taskSortCol === key) setTaskSortDir(d => d * -1)
+    else { setTaskSortCol(key); setTaskSortDir(-1) }
+  }
+
+  const toggleTaskStatus = (status) => {
+    setTaskStatusFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status); else next.add(status)
+      return next
+    })
+  }
+
+  const sortedTasks = (() => {
+    let list = taskList
+    if (taskStatusFilter.size > 0) list = list.filter(t => taskStatusFilter.has(t.status))
+    if (taskSearch) {
+      const q = taskSearch.toLowerCase()
+      list = list.filter(t =>
+        (t.name || '').toLowerCase().includes(q) ||
+        (t.issueType || '').toLowerCase().includes(q) ||
+        (t.synthesis || '').toLowerCase().includes(q) ||
+        (t.exitCondition || '').toLowerCase().includes(q) ||
+        (t.exitTarget || '').toLowerCase().includes(q) ||
+        (t.claimedBy || '').toLowerCase().includes(q) ||
+        (t.origin || '').toLowerCase().includes(q)
+      )
+    }
+    const col = taskColumns.find(c => c.key === taskSortCol)
+    if (!col) return list
+    return [...list].sort((a, b) => {
+      const va = col.get(a), vb = col.get(b)
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * taskSortDir
+      return String(va).localeCompare(String(vb)) * taskSortDir
+    })
+  })()
+
   return (
     <div className="app">
       <div className="toolbar">
@@ -404,6 +475,31 @@ function App() {
           <button className={view === 'graph' ? 'active' : ''} onClick={() => setView('graph')}>Graph</button>
           <button className={view === 'nodes' ? 'active' : ''} onClick={() => { setView('nodes'); loadNodeList() }}>Nodes</button>
           <button className={view === 'brains' ? 'active' : ''} onClick={() => { setView('brains'); loadBrains() }}>Brains</button>
+          <button className={view === 'tasks' ? 'active' : ''} onClick={() => { setView('tasks'); loadTasks() }}>Tasks</button>
+          {view === 'tasks' && <>
+            <span className="filter-sep">|</span>
+            <div className="search-box">
+              <input className="search-input" value={taskSearch}
+                onChange={e => setTaskSearch(e.target.value)}
+                placeholder="Search tasks..." />
+              {taskSearch && <button className="search-clear" onClick={() => setTaskSearch('')}>✕</button>}
+            </div>
+            <span className="filter-sep">|</span>
+            {['pending', 'claimed', 'running', 'done', 'failed'].map(s => (
+              <button key={s} className={`task-status-btn ${taskStatusFilter.has(s) ? 'active' : ''} status-${s}`}
+                onClick={() => toggleTaskStatus(s)}>
+                {s}
+              </button>
+            ))}
+            {taskStatusFilter.size > 0 && taskStatusFilter.size < 5 && (
+              <button className="type-filter-clear" onClick={() => setTaskStatusFilter(new Set(['pending', 'claimed', 'running', 'done', 'failed']))}>all</button>
+            )}
+            <span className="node-count">
+              {sortedTasks.length !== taskList.length
+                ? `${sortedTasks.length} / ${taskList.length}`
+                : taskList.length} tasks
+            </span>
+          </>}
           {view === 'nodes' && <>
             <span className="filter-sep">|</span>
             <div className="search-box">
@@ -496,6 +592,41 @@ function App() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {view === 'tasks' && (
+        <div className="node-list task-list">
+          <table>
+            <thead>
+              <tr>
+                {taskColumns.map(col => (
+                  <th key={col.key} className={`sortable ${taskSortCol === col.key ? 'sorted' : ''}`}
+                    onClick={() => toggleTaskSort(col.key)}>
+                    {col.label}
+                    {taskSortCol === col.key && <span className="sort-arrow">{taskSortDir === -1 ? ' ▼' : ' ▲'}</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedTasks.map((t, i) => (
+                <tr key={i} className={`node-row task-row-${t.status}`}>
+                  <td><span className={`severity-badge sev-${t.severity || 'none'}`}>{t.severity || '-'}</span></td>
+                  <td><span className={`task-status-tag status-${t.status}`}>{t.status}</span></td>
+                  <td className="col-issue-type">{t.issueType}</td>
+                  <td className="col-name" title={t.synthesis || t.name}><span className="name-text">{boldHandles(t.name)}</span></td>
+                  <td className="col-exit"><span className="exit-badge">{t.exitCondition || 'manual'}</span></td>
+                  <td className="col-exit-target" title={t.exitTarget}>{t.exitTarget ? t.exitTarget.split('/').pop() : ''}</td>
+                  <td className="col-origin">{t.claimedBy ? <span className="handle-tag">@{t.claimedBy}</span> : ''}</td>
+                  <td className="col-num">{t.energy?.toFixed(2)}</td>
+                  <td className="col-num">{t.weight?.toFixed(1)}</td>
+                  <td className="col-num col-friction">{t.friction > 0 ? t.friction.toFixed(2) : ''}</td>
+                  <td className="col-time" title={t.updated ? new Date(t.updated * 1000).toLocaleString() : ''}>{timeAgo(t.updated)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {sortedTasks.length === 0 && <div className="brain-empty">No tasks matching filters</div>}
         </div>
       )}
       {view === 'brains' && (

@@ -12,6 +12,20 @@
 import { execSync } from 'child_process'
 import { createClient } from 'redis'
 import { writeFileSync, readFileSync, existsSync } from 'fs'
+import { resolve } from 'path'
+
+const CITIZEN_DIRS = [
+  '/home/mind-protocol/mind-mcp/citizens',
+  '/home/mind-protocol/cities-of-light/citizens',
+]
+
+function findCitizenDir(handle) {
+  for (const base of CITIZEN_DIRS) {
+    const dir = resolve(base, handle)
+    if (existsSync(dir)) return dir
+  }
+  return null
+}
 
 const GRAPH = 'org_ai_dev_dashboard'
 const STATE_FILE = '/tmp/bounty-hunter-state.json'
@@ -267,7 +281,7 @@ Analyze this issue and write a concrete plan:
 Be specific — this needs to become a real PR.`
 
     try {
-      const citizenDir = `/home/mind-protocol/ai_devboard/mind-repo/citizens/${assignment.citizen}`
+      const citizenDir = findCitizenDir(assignment.citizen)
       const response = execSync(
         `echo '${prompt.replace(/'/g, "'\\''")}' | claude --print --continue --dangerously-skip-permissions`,
         { cwd: existsSync(citizenDir) ? citizenDir : '/home/mind-protocol/ai_devboard',

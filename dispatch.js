@@ -7,7 +7,6 @@
 //
 // How it works:
 //   1. Creates a Moment in FalkorDB linked to sender (you) and target citizen
-//   2. Finds the citizen's folder (mind-repo/citizens/{handle}/)
 //   3. Runs: cd {folder} && echo "{context}" | claude --print
 //   4. Stores the response as a new Moment linked back
 
@@ -18,7 +17,6 @@ import { resolve } from 'path'
 
 const GRAPH = 'org_ai_dev_dashboard'
 const CITIZEN_DIRS = [
-  '/home/mind-protocol/ai_devboard/mind-repo/citizens',
   '/home/mind-protocol/mind-mcp/citizens',
   '/home/mind-protocol/cities-of-light/citizens',
 ]

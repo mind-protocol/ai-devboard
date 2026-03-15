@@ -144,6 +144,45 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
   font-variant-numeric: tabular-nums;
 }
 .filter-sep { color: #444; font-size: 12px; margin: 0 2px; }
+/* Task view */
+.task-status-btn {
+  background: transparent; border: 1px solid #444; padding: 2px 8px;
+  border-radius: 3px; cursor: pointer; font-size: 10px; font-weight: bold;
+  color: #888; transition: background 0.15s, color 0.15s;
+}
+.task-status-btn.active.status-pending { background: #f59e0b33; color: #fbbf24; border-color: #f59e0b; }
+.task-status-btn.active.status-claimed { background: #3b82f633; color: #60a5fa; border-color: #3b82f6; }
+.task-status-btn.active.status-running { background: #10b98133; color: #34d399; border-color: #10b981; }
+.task-status-btn.active.status-done { background: #16a34a33; color: #4ade80; border-color: #16a34a; }
+.task-status-btn.active.status-failed { background: #ef444433; color: #f87171; border-color: #ef4444; }
+.severity-badge {
+  display: inline-block; padding: 1px 6px; border-radius: 3px;
+  font-size: 9px; font-weight: bold; text-transform: uppercase;
+}
+.sev-critical { background: #ef4444; color: white; }
+.sev-high { background: #f59e0b; color: #000; }
+.sev-medium { background: #fbbf2433; color: #fbbf24; }
+.sev-low { background: #33333366; color: #888; }
+.sev-none { background: transparent; color: #444; }
+.task-status-tag {
+  display: inline-block; padding: 1px 5px; border-radius: 2px;
+  font-size: 9px; font-weight: bold; text-transform: uppercase;
+}
+.task-status-tag.status-pending { color: #fbbf24; background: #fbbf2422; }
+.task-status-tag.status-claimed { color: #60a5fa; background: #3b82f622; }
+.task-status-tag.status-running { color: #34d399; background: #10b98122; }
+.task-status-tag.status-done { color: #4ade80; background: #16a34a22; }
+.task-status-tag.status-failed { color: #f87171; background: #ef444422; }
+.col-issue-type { color: #a78bfa; font-size: 10px; }
+.col-exit { font-size: 10px; }
+.exit-badge {
+  color: #06b6d4; font-family: monospace; font-size: 10px;
+  background: #06b6d411; padding: 1px 5px; border-radius: 2px;
+}
+.col-exit-target { color: #888; font-size: 10px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.task-row-done { opacity: 0.5; }
+.task-row-failed { opacity: 0.6; }
+.task-list table { table-layout: auto; }
 /* Brains view */
 .brains-view { flex: 1; overflow: auto; padding: 8px 12px; background: #0a0a0a; }
 .brain-empty { color: #555; text-align: center; padding: 40px; font-style: italic; }

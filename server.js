@@ -238,6 +238,39 @@ app.get('/api/brains', async (req, res) => {
   } catch (e) { res.json({ error: e.message }) }
 })
 
+// Tasks — pending/running task_run nodes with exit conditions
+app.get('/api/tasks/:graph', async (req, res) => {
+  const { graph } = req.params
+  const statusFilter = req.query.status || '' // comma-separated: 'pending,running,claimed'
+  try {
+    // Fetch task_run nodes with their AFFECTS link condition
+    const statusClause = statusFilter
+      ? `AND t.status IN [${statusFilter.split(',').map(s => `'${s.trim()}'`).join(',')}]`
+      : ''
+    const raw = await redis.sendCommand(['GRAPH.QUERY', graph,
+      `MATCH (t:Moment) WHERE t.type = 'task_run' ${statusClause}
+       OPTIONAL MATCH (t)-[r:link]->(target) WHERE r.r_type = 'AFFECTS'
+       RETURN t.id, t.name, t.status, t.severity, t.issue_type, t.synthesis,
+              t.energy, t.weight, t.friction, t.stability,
+              t.origin_citizen, t.claimed_by,
+              t.created_at_s, t.updated_at_s,
+              r.condition, r.condition_target
+       ORDER BY t.energy DESC
+       LIMIT 500`])
+    const tasks = (raw?.[1] || []).map(row => ({
+      id: row[0], name: row[1] || row[0], status: row[2] || 'pending',
+      severity: row[3] || '', issueType: row[4] || '',
+      synthesis: row[5] || '', energy: parseFloat(row[6]) || 0,
+      weight: parseFloat(row[7]) || 0, friction: parseFloat(row[8]) || 0,
+      stability: parseFloat(row[9]) || 0,
+      origin: row[10] || '', claimedBy: row[11] || '',
+      created: row[12] || null, updated: row[13] || null,
+      exitCondition: row[14] || '', exitTarget: row[15] || '',
+    }))
+    res.json(tasks)
+  } catch (e) { res.json([]) }
+})
+
 // Full citizen dashboard — L1 + L2 state, tasks, messages, active nodes
 app.get('/api/dashboard/:graph', async (req, res) => {
   const { graph } = req.params
@@ -502,7 +535,6 @@ function parseGraphResult(raw) {
 const MSG_GRAPH = 'org_ai_dev_dashboard'
 const CITIZEN_DIRS = [
   '/home/mind-protocol/mind-mcp/citizens',
-  '/home/mind-protocol/ai_devboard/mind-repo/citizens',
   '/home/mind-protocol/cities-of-light/citizens',
 ]
 

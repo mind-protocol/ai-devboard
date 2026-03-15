@@ -20,7 +20,6 @@ const SKIP_DIRS = new Set([
   'claude-1000', 'snap-private-tmp', 'v8-compile-cache-1000',
   'node-compile-cache', 'mind_ideogram', 'mind_telegram_voice',
   '__pycache__', 'assets', 'public',
-  // mind-repo noise
   'uploads', 'static', 'shrine', 'android', 'lyrics',
 ])
 
@@ -29,7 +28,7 @@ const SKIP_PREFIXES = ['systemd-private-', 'tmp', '.X11']
 
 // Skip paths matching these patterns (checked against relPath)
 const SKIP_PATHS = [
-  'mind-repo/citizens/',  // 186 citizen folders — skip individual dirs, keep the top-level
+  'citizens/',  // 186 citizen folders — skip individual dirs, keep the top-level
 ]
 
 // File extensions to ingest
@@ -492,7 +491,7 @@ async function main() {
   const allApiCalls = []  // collect across files for cross-file wiring
   for (const f of files) {
     if (!['.js', '.jsx', '.ts', '.tsx', '.py'].includes(f.ext)) continue
-    if (f.relPath.startsWith('mind-repo/')) continue // skip vendored
+    if (f.relPath.startsWith('')) continue // skip vendored
     try {
       const content = await readFile(f.relPath, 'utf-8')
       const elements = parseCodeDeep(content, f.relPath)
@@ -676,7 +675,7 @@ async function main() {
   }
   for (const f of files) {
     if (!['.js', '.jsx', '.py'].includes(f.ext)) continue
-    if (f.relPath.startsWith('mind-repo/')) continue // skip vendored code
+    if (f.relPath.startsWith('')) continue // skip vendored code
     if (!referencedByDocs.has(f.relPath)) {
       issues.push({ type: 'undocumented_code', file: f.relPath, severity: 'medium' })
     }
@@ -760,7 +759,7 @@ async function main() {
   // Orphan code_function nodes (no BELONGS_TO link to a file)
   for (const f of files) {
     if (!['.js', '.jsx', '.py'].includes(f.ext)) continue
-    if (f.relPath.startsWith('mind-repo/')) continue
+    if (f.relPath.startsWith('')) continue
     try {
       const content = await readFile(f.relPath, 'utf-8')
       const elements = parseCodeDeep(content, f.relPath)
@@ -835,7 +834,7 @@ async function main() {
   let syntaxFixes = 0
   for (const f of files) {
     if (!['.js', '.jsx'].includes(f.ext)) continue
-    if (f.relPath.startsWith('mind-repo/') || f.relPath.startsWith('node_modules/')) continue
+    if (f.relPath.startsWith('') || f.relPath.startsWith('node_modules/')) continue
     try {
       const content = await readFile(f.relPath, 'utf-8')
 
@@ -890,7 +889,7 @@ async function main() {
   // Same for Python skeletons
   for (const f of files) {
     if (f.ext !== '.py') continue
-    if (f.relPath.startsWith('mind-repo/')) continue
+    if (f.relPath.startsWith('')) continue
     try {
       const content = await readFile(f.relPath, 'utf-8')
       const notImplCount = (content.match(/raise NotImplementedError/g) || []).length
@@ -1127,7 +1126,7 @@ async function main() {
   const existingFns = new Set()
   for (const f of files) {
     if (!['.js', '.jsx', '.py'].includes(f.ext)) continue
-    if (f.relPath.startsWith('mind-repo/')) continue
+    if (f.relPath.startsWith('')) continue
     try {
       const content = await readFile(f.relPath, 'utf-8')
       const elements = parseCodeDeep(content, f.relPath)
@@ -1292,7 +1291,7 @@ async function main() {
   const undocFns = []
   for (const f of files) {
     if (!['.js', '.jsx'].includes(f.ext)) continue
-    if (f.relPath.startsWith('mind-repo/')) continue
+    if (f.relPath.startsWith('')) continue
     try {
       const content = await readFile(f.relPath, 'utf-8')
       const elements = parseCodeDeep(content, f.relPath)

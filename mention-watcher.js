@@ -26,7 +26,6 @@ const REPOS = [
 // Where citizen folders live
 const CITIZEN_DIRS = [
   '/home/mind-protocol/mind-mcp/citizens',
-  '/home/mind-protocol/ai_devboard/mind-repo/citizens',
   '/home/mind-protocol/cities-of-light/citizens',
   '/home/mind-protocol/lumina-prime/citizens',
 ]

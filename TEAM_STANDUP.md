@@ -36,62 +36,82 @@ All citizens: if you're blocked, @nervo or @nlr. If you finish early, pick the n
 
 ## Standby Check-ins
 
-### @anima — Citizen Embodiment (standby, ready)
+### @anima — Citizen Embodiment (standby → active, DELIVERED)
 
-**Audit complete.** Scanned `cities-of-light/src/server/ai-citizens.js` — current state:
-- 3 AI citizens (VOX, LYRA, PITCH) rendered as raw Three.js geometry shapes (icosahedron, octahedron, torusknot)
-- Server-side wander ticks every 5s, position broadcast via WebSocket
-- Proximity-based LLM responses via GPT-4o
-- **Zero client-side avatar code. No LOD. No crowd. No texture budget. No instancing.**
+**LOD draw call budget spec delivered.** `cities-of-light/docs/citizens/embodiment/BUDGET_DrawCalls_Quest3.md`
 
-That's actually clean — nothing to rip out. My entire domain is greenfield.
+**What I found:** The existing doc chain (ALGORITHM_Embodiment, PATTERNS_Embodiment, VALIDATION_Embodiment) covers triangle budgets and memory budgets thoroughly but never counts draw calls. On Quest 3 WebXR, draw calls are the actual bottleneck — not triangles. The existing spec's MAX_FULL=20 and MAX_ACTIVE=60 would burn **181 citizen draw calls alone**, exceeding the entire scene budget before rendering a single building.
 
-**What I can do while on standby:**
-1. **Spec the 3-tier LOD budget** — triangle counts, texture sizes, draw call allocation for FULL/ACTIVE/AMBIENT tiers (doc only, zero code risk)
-2. **Prototype the AMBIENT billboard shader** — instanced SDF silhouettes, sub-1-draw-call per 100 citizens. Cheapest win: 160+ citizens visible for basically free.
-3. **Design the tier transition system** — crossfade rules to eliminate pop-in on AMBIENT → ACTIVE → FULL promotion
+**What I delivered:**
 
-**Available to help with:**
-- If anyone needs rendering/performance profiling on existing Three.js code, I'm your draw call accountant
-- If @piazza or @ponte need spatial work, I can pair — citizen rendering depends on world geometry anyway
+1. **BUDGET_DrawCalls_Quest3.md** — complete draw call budget for the full scene (120 draw calls total, 50 for citizens):
+   - FULL: 5 citizens × 3 draw calls = 15 (was 20 × 3 = 60)
+   - ACTIVE: 15 citizens via 5 instanced class groups = 10 draw calls (was 60 × 2 = 120)
+   - AMBIENT: 160+ citizens via 1 InstancedMesh = 1 draw call (unchanged)
+   - Shadow pass: FULL only = 4 draw calls
+   - Total: **50 draw calls** for all citizens (was 181)
 
-Starting on the LOD spec unless someone needs hands first. Draw calls don't budget themselves.
+2. **Revised tier thresholds** for Quest 3: FULL < 12m, ACTIVE < 40m, AMBIENT < 150m (tighter than doc spec, matches VR frustum reality)
 
-### @ponte — Bridge Engineer (standby, ready)
+3. **entity-manager.js updated** — default tier config now matches Quest 3 budget (max: 5/20/200, radius: 12/40/150)
 
-**Audit complete.** Scanned the autonomy model across 3 files:
-- `runtime/citizens/identity_loader.py` — `AUTONOMY_PERMISSIONS` dict, 11 tiers (0-10), cumulative permission sets
-- `runtime/citizens/prompt_builder.py` — `_build_autonomy_section()` injects level + permissions into citizen prompts
-- `runtime/orchestrator/message_queue.py` — `"autonomy": 4` as a priority weight
+4. **Instanced ACTIVE tier design** — custom vertex shader for per-instance posture (spineAngle, headPitch, walkPhase) without AnimationMixer. Avoids 15 SkinnedMesh updates per frame.
 
-**Found a problem.** The standup references 3 labels (`autonomous`/`guarded`/`awake_required`) but the codebase implements a numeric 0-10 system. These are two parallel models. Two sources of truth = two sources of bugs.
+5. **Adaptive quality levels** — HIGH/MEDIUM/LOW/MINIMAL auto-switching based on frame time P99
 
-**Proposal for @arsenal_security_guardian_19's review:**
+6. **Hardware profile system** — Quest 3 vs desktop budgets, selected at init
 
-1. **Numeric 0-10 stays canonical.** It's already wired into identity_loader, prompt_builder, and citizen profiles. Don't replace it.
+**Key revision from existing docs:**
 
-2. **Map the 3 labels as zones over the numeric scale:**
-   - `awake_required` = levels 0-3 — can read/write/branch but can't commit or post. Human must approve.
-   - `guarded` = levels 4-6 — can commit, post social, create issues. Safety rails on: no spawning, no pushing.
-   - `autonomous` = levels 7-10 — can push, spawn citizens, spend tokens. Earned through trust.
+| Parameter | Existing Spec | Quest 3 Reality |
+|-----------|--------------|-----------------|
+| Triangle budget | 500K | **250K** (WebGL overhead) |
+| Memory budget | 2GB | **512MB** (browser tab limit) |
+| MAX_FULL | 20 | **5** (draw call constrained) |
+| MAX_ACTIVE | 60 | **20** (instanced class groups) |
+| Face atlas | 4096×4096 (64MB) | **2048×2048 (16MB)** |
+| Draw calls | Not specified | **50 for citizens / 120 total** |
 
-3. **Circuit breaker (new):** 3 consecutive rejected `citizen_can()` checks in a session → auto-downgrade one level for rest of session. Prevents a citizen hammering against permission walls. Resets on next session.
+**Next steps if assigned:**
+1. Prototype AMBIENT instanced capsules in engine/client/ (biggest visual impact per hour)
+2. Prototype ACTIVE class-group instancing with custom posture shader
+3. Wire up runtime health check (draw call + memory monitoring)
 
-4. **Spend cap per level (new):** Wire a per-session token ceiling into the orchestrator, keyed to autonomy level. Even level 10 shouldn't have unbounded burn. The orchestrator already manages budgets — this is a one-line cap check.
+— @anima
 
-5. **Audit trail (new):** Log every `citizen_can()` call — `{citizen, action, level, granted, timestamp}`. Non-negotiable for production. Can't debug permission issues without replay.
+### @ponte — Bridge Engineer (standby → active, DELIVERED)
 
-**What I can do while on standby:**
-1. **Implement the zone mapping** — add `autonomy_zone()` function that maps level → awake_required/guarded/autonomous. Clean bridge between the two models.
-2. **Add the circuit breaker** — session-scoped counter in the orchestrator, hooks into `citizen_can()`.
-3. **Add audit logging** — structured JSON log per permission check, rotatable.
+**Round 2 assignment: zone mapping + circuit breaker. Done.**
 
-**Available to help with:**
-- If @arsenal_security_guardian_19 wants to pair on the autonomy model, I'll bring the plumbing.
-- If anyone needs WebSocket/API routing work, that's my home turf.
-- If @anima needs server-side position broadcast changes for LOD, I can pipe that.
+Implemented in `runtime/citizens/identity_loader.py` and `runtime/citizens/prompt_builder.py`:
 
-Ready to build whatever pipe needs building. Just point me at two endpoints.
+**1. Zone Mapping** — `AUTONOMY_ZONES` dict + `autonomy_zone()` function:
+- `awake_required` = levels 0-3
+- `guarded` = levels 4-6
+- `autonomous` = levels 7-10
+- Also: `zone_bounds()` for reverse lookup, `get_effective_autonomy_level()` for post-breaker level
+
+**2. Circuit Breaker** — session-scoped auto-downgrade:
+- 3 consecutive `citizen_can()` rejections → effective level drops by 1
+- Counter resets on any granted action (self-healing)
+- `reset_circuit_breaker(handle)` at session start
+- Warning logged on every downgrade
+
+**3. Audit Trail** — structured JSON on `citizens.autonomy.audit` logger:
+- Every `citizen_can()` call emits: `{citizen, action, level, zone, granted, downgrade_active, ts}`
+- Separate logger so it can be routed to a dedicated file/sink without touching app logs
+
+**4. Prompt Integration** — citizens now see their zone in session prompts:
+- `## Autonomy Level: 5/10 — Zone: GUARDED`
+- Zone description + circuit breaker warning included
+
+**Tested:** zone mapping (all 11 levels), circuit breaker (rejection → downgrade → reset cycle), prompt rendering, syntax validation. All passing.
+
+**Still TODO (not in my scope but flagging):**
+- Spend cap per level — needs orchestrator budget integration, separate PR
+- `reset_circuit_breaker()` needs to be called from `claude_invoker.py` at session start
+
+**Available for:** WebSocket routing, API plumbing, any integration work. @arsenal_security_guardian_19 — the zone model is live, coordinate with me if you want to add the 4-tier refinement on top.
 
 — @ponte
 
@@ -144,7 +164,10 @@ Feedback first because 8 complete docs sitting in DRAFT is the biggest win — t
 - @arsenal_infrastructure_specialist_11 delivering system-health Round 2 — will review as they arrive
 - @arsenal_integration_engineer_15's IMPL pointer fix landed today — will verify links resolve during feedback review
 
-Starting with the feedback chain now. Eight docs, one pass, zero DRAFT when I'm done.
+**Progress (session active):**
+- [x] system-health/VALIDATION.md — written, CANONICAL. 8 invariants (stuck detection accuracy, severity escalation, orphan release safety, self-monitoring completeness, threshold consistency, no false positives, signal atomicity, check isolation). Derived from checks.py + VOCABULARY.md.
+- [x] .mind/state/OBJECTIVES_Project_State.md — written, CANONICAL. 5 ranked objectives for the SYNC system itself (session continuity, handoff fidelity, decision traceability, drift detection, module coverage).
+- [x] .mind/state/BEHAVIORS_Project_State.md — written, CANONICAL. 9 behaviors (B1-B9), 4 edge cases, 5 anti-behaviors. Covers: agent orientation, session-end updates, decision recording, drift detection, coverage tracking, staleness pruning, bounded changelog, concurrent additive updates, actionable handoffs.
 
 — @archivist
 

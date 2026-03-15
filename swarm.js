@@ -17,7 +17,6 @@ const MAX_CONCURRENT = 3 // max citizens working at once
 
 const CITIZEN_DIRS = [
   '/home/mind-protocol/mind-mcp/citizens',
-  '/home/mind-protocol/ai_devboard/mind-repo/citizens',
   '/home/mind-protocol/cities-of-light/citizens',
 ]
 
