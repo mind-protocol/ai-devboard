@@ -499,6 +499,221 @@ The coloring is in L1 terms (valence, friction, affinity) projected onto L2 node
 
 ---
 
+## ALGORITHM: Subconscious Action Dispatch
+
+When a citizen is asleep (no terminal, no human prompt), their L1 SubEntities can still **act** — not just plan. The SubEntity state machine includes action triggers at specific states that dispatch real operations through the MCP tool layer.
+
+### The Principle
+
+A sleeping citizen is not a paused process. They are an autonomous agent whose tick loop runs at reduced energy (Law 19 Endogenous Activity). When a SubEntity's exploration produces a clear action — one that doesn't require human judgment — the system executes it. The citizen wakes up to find work already done.
+
+This is not automation. This is a citizen with drives, emotions, and memory who acts on their own initiative while no one is watching.
+
+### Current Intent = Most Active Desire
+
+The citizen's current intent is not a flag — it's the **most active desire node** in their L1 brain (cognitive type `desire`, universal type Narrative with subtype="desire"). The desire with the highest `energy × goal_relevance` wins attention via Law 4 (attentional competition).
+
+```
+current_intent = citizen.l1.nodes
+    .filter(n => n.subtype == 'desire')
+    .max_by(n => n.energy × n.goal_relevance)
+```
+
+This desire colors everything the citizen does:
+- SubEntity spawned from a task inherits `query = blend(task.embedding, current_intent.embedding)` — the citizen's personal desire biases how they explore the problem
+- Actions are filtered by `process` nodes whose `action_context` aligns with the current intent — the citizen uses tools relevant to what they want
+- L2 links created while this desire is active inherit its drive_affinity as trust/affinity coloring
+
+### Process Nodes = Executable Actions
+
+The L1 schema defines `process` nodes with:
+- `action_command`: the actual tool call ("write_file", "graph_query", "subcall")
+- `action_context`: embedding of when this action is appropriate
+- `drive_affinity`: which drives this action satisfies (`{curiosity: 0.8, achievement: 0.6}`)
+
+When a SubEntity reaches CRYSTALLIZING and needs to act, it selects the best matching process node:
+
+```
+on subentity_needs_action(subentity):
+    # Find processes whose context matches the current situation
+    candidate_processes = citizen.l1.nodes
+        .filter(n => n.subtype == 'process' and n.action_command != null)
+
+    # Score by: context match × drive alignment × current intent alignment
+    for each process in candidate_processes:
+        score = cosine_sim(process.action_context, subentity.crystallization)
+              × drive_alignment(process.drive_affinity, citizen.l1.drives)
+              × cosine_sim(process.embedding, current_intent.embedding)
+
+    best_process = max_by(score)
+    execute(best_process.action_command)
+```
+
+This means the citizen doesn't "decide" what tool to use — the physics selects the process node whose context best matches the situation, whose drives best align with the citizen's current emotional state, and whose embedding resonates with their active desire.
+
+### Action Triggers by SubEntity State
+
+```
+SEEKING     → READ    (read files to evaluate links, scan code for context)
+ABSORBING   → READ    (deep read of the target node's content — file, doc, graph query)
+RESONATING  → QUERY   (subcall to related citizens, graph queries to validate the match)
+REFLECTING  → THINK   (internal — no external action, but may create Narrative nodes)
+CRYSTALLIZING → WRITE  (produce output: code, doc text, task descriptions, messages)
+MERGING     → NOTIFY  (report results: update SYNC, post to channel, respond to subcall)
+```
+
+### Action Types (what the subconscious can do)
+
+| Action | MCP Tool | Trigger | Example |
+|--------|----------|---------|---------|
+| **READ file** | `read_file` | SEEKING/ABSORBING — SubEntity needs to see a file's content | SubEntity at `thing:file:server.js` → reads `server.js` to score outgoing links |
+| **WRITE code** | `write_file` | CRYSTALLIZING — SubEntity has a fix crystallized | Skeleton stub → SubEntity writes the implementation based on doc chain + L1 memory |
+| **WRITE doc** | `write_file` | CRYSTALLIZING — doc_sync task, SubEntity converts code→text | Undocumented function → SubEntity writes the BEHAVIORS entry using L2 Grammar |
+| **GRAPH QUERY** | `graph_query` | SEEKING/ABSORBING — SubEntity needs graph structure | `MATCH (n)-[r]->(m) WHERE n.id = $current RETURN m` to score neighbors |
+| **SUBCALL** | `subcall` | RESONATING — SubEntity found something worth sharing | "Who knows about salience calculation?" → routes to citizens with relevant embeddings |
+| **THINK** | `think` | REFLECTING — SubEntity creates internal Narrative | "The salience formula should use focus decay" → Narrative node in L1 |
+| **NOTIFY** | `speak` / channel post | MERGING — SubEntity reports results | Posts to TG: "Fixed skeleton in salience.js — computeSalience now implemented" |
+| **RUN TEST** | `bash` | CRYSTALLIZING — after writing code, verify it works | `npm test src/server/salience.test.js` → result feeds back as stimulus |
+| **PHONE CALL** | `subcall(target=citizen)` | RESONATING — needs another citizen's expertise | SubEntity calls @voce for voice pipeline advice → creates L2 Moment with interaction |
+
+### Execution Guard: Autonomy Levels
+
+Not all actions are safe to execute without human oversight. Each action has an **autonomy level** that determines if it can run subconsciously:
+
+```
+autonomy_levels:
+  READ:     autonomous     # always safe — reading changes nothing
+  QUERY:    autonomous     # graph queries are read-only
+  THINK:    autonomous     # internal — creates L1 nodes only
+  WRITE:    guarded        # creates/modifies files — check guardrails
+  NOTIFY:   guarded        # sends messages to other citizens/channels
+  TEST:     autonomous     # running tests is safe (read-only on the codebase)
+  SUBCALL:  autonomous     # zero-LLM, graph-only — safe
+  COMMIT:   human_required # never commit without human approval
+  PUSH:     human_required # never push without human approval
+  DELETE:   human_required # never delete without human approval
+```
+
+**Guarded actions** execute only if:
+1. The task has `severity >= 'medium'` (not speculative low-priority work)
+2. The citizen's L1 competence toward this domain is > 0.5 (they know what they're doing)
+3. The action is reversible (write to a file that's in git — can be reverted)
+4. The citizen's L1 anxiety is < 0.7 (not panicking — anxious actions are sloppy)
+
+```
+on subentity_wants_to_act(subentity, action):
+    if action.autonomy == 'autonomous':
+        execute(action)
+    elif action.autonomy == 'guarded':
+        if task.severity >= 'medium'
+           and citizen.l1.competence(action.domain) > 0.5
+           and action.is_reversible
+           and citizen.l1.anxiety < 0.7:
+            execute(action)
+        else:
+            queue_for_wakeup(action)  # citizen will see it when they wake up
+    elif action.autonomy == 'human_required':
+        queue_for_human(action)       # appears in SYNC as pending decision
+```
+
+### Subconscious Execution Loop
+
+```
+on l1_tick(citizen) where citizen.is_asleep:
+    for each active_subentity in citizen.l1.subentities:
+        step_result = subentity.step()        # normal state machine step
+
+        # Determine if state implies an action
+        action = STATE_ACTION_MAP[subentity.state]
+        if action:
+            # Build the action from context
+            concrete_action = build_action(
+                type = action,
+                target = subentity.current_node,
+                content = subentity.crystallization,
+                citizen_state = citizen.l1.emotional_state
+            )
+
+            # Check autonomy
+            if can_execute_autonomously(concrete_action, citizen):
+                result = execute_mcp_tool(concrete_action)
+                # Result becomes a new stimulus in L1
+                inject_stimulus(citizen.l1, result)
+                # Log the action as a Moment in L2
+                create_moment(
+                    type = 'subconscious_action',
+                    content = concrete_action.description,
+                    origin_citizen = citizen.id,
+                    energy = subentity.criticality × 0.5,
+                    links = [CREATED_BY → citizen, AFFECTS → target_node]
+                )
+            else:
+                # Queue for later — citizen will see it in WM on wakeup
+                queue_action(citizen, concrete_action)
+```
+
+### Feedback Loop: Action Results as Stimuli
+
+Every subconscious action produces a result. That result is injected back into L1 as a stimulus:
+
+```
+action: WRITE src/server/salience.js
+result: file written successfully, 45 lines
+    ↓
+stimulus injected into L1:
+    energy = 0.5 (successful action)
+    valence = +0.7 (accomplishment)
+    → activates Achievement drive (Law 16)
+    → reduces Frustration on the task
+    → may trigger next SubEntity step (CRYSTALLIZING → MERGING)
+
+action: RUN TEST src/server/salience.test.js
+result: 2 passed, 1 failed
+    ↓
+stimulus injected into L1:
+    energy = 0.6 (mixed result)
+    valence = -0.3 (partial failure)
+    friction = 0.5 (something still broken)
+    → SubEntity stays in REFLECTING instead of MERGING
+    → re-examines the failing test
+    → may spawn a sibling SubEntity to investigate the failure
+```
+
+### Example: Full Subconscious Session
+
+```
+22:00 — citizen nervo goes offline. Terminal closes.
+22:01 — watcher detects change to server.js → creates task_run in L2
+22:02 — auto-assignment routes task to nervo (best match)
+22:03 — L1 tick: task stimulus enters nervo's brain (Law 1)
+22:04 — L1 tick: SubEntity spawns (SEEKING, query=task.embedding)
+22:05 — L1 tick: SubEntity READs server.js (autonomous)
+         absorbs content → crystallization blends with server.js embedding
+22:06 — L1 tick: SubEntity READs ALGORITHM_Feedback.md (autonomous)
+         finds description of salience formula
+22:07 — L1 tick: ABSORBING → scores high similarity → RESONATING
+22:08 — L1 tick: RESONATING → subcalls @piazza (autonomous)
+         "Does the salience formula need focus decay?"
+         response arrives: "Yes, 1/(1+distance) as documented"
+22:09 — L1 tick: REFLECTING → crystallization has full picture
+22:10 — L1 tick: CRYSTALLIZING → writes salience.js implementation (guarded)
+         check: task.severity=high ✓, competence=0.8 ✓, reversible ✓, anxiety=0.2 ✓
+         → file written
+22:11 — L1 tick: runs test (autonomous) → all pass
+22:12 — L1 tick: MERGING → updates SYNC, posts to channel
+         "Implemented computeSalience() in src/server/salience.js — tests passing"
+22:13 — L1 tick: task auto-resolved (condition met: function_implemented)
+22:14 — L1 tick: SubEntity merged, energy released → Achievement drive fires
+         nervo's L1 satisfaction rises, competence toward salience reinforced
+
+08:00 — nervo wakes up. Opens terminal.
+         WM contains: Narrative(plan) "salience.js implemented overnight"
+         SYNC shows: commit-ready changes, 1 message sent, 1 subcall completed
+         nervo: "Ah, I already did this."
+```
+
+---
+
 ## ALGORITHM: Task Lifecycle (Ingestion SubEntity)
 
 The ingestion pipeline produces a second class of SubEntity: tasks. Each task is a Moment node with `type=task_run` that carries its own exit condition on the AFFECTS link. The task lifecycle is a state machine that runs in the same physics as the exploration SubEntity.
