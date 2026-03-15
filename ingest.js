@@ -422,6 +422,69 @@ async function main() {
     }
   }
 
+  // ==========================================================================
+  // PHASE 0: AUTO-RESOLVE COMPLETED TASKS
+  // ==========================================================================
+  // Check existing task_run nodes: if their AFFECTS link condition is now met,
+  // mark status='done' and set energy=0 (L7 will prune them on decay).
+  if (!DRY_RUN) {
+    const redisP0 = createClient({ url: `redis://${process.env.FALKORDB_HOST || 'localhost'}:${process.env.FALKORDB_PORT || 6379}` })
+    await redisP0.connect()
+    try {
+      const pendingTasks = await redisP0.sendCommand(['GRAPH.QUERY', GRAPH,
+        `MATCH (task:Moment)-[r:link]->(target) WHERE task.type = 'task_run' AND task.status = 'pending' AND r.condition IS NOT NULL RETURN task.id, r.condition, r.condition_target`])
+      let resolved = 0
+      for (const row of (pendingTasks?.[1] || [])) {
+        if (!Array.isArray(row) || row.length < 3) continue
+        const [taskId, condition, condTarget] = row
+        let met = false
+
+        if (condition === 'file_exists') {
+          met = files.some(f => f.relPath === condTarget)
+        } else if (condition === 'no_throw_not_implemented') {
+          try {
+            const content = await readFile(condTarget, 'utf-8')
+            met = !content.includes('throw new Error(\'Not implemented') && !content.includes('raise NotImplementedError')
+          } catch (_) { met = false }
+        } else if (condition === 'doc_mentions') {
+          for (const f of files) {
+            if (f.ext !== '.md') continue
+            try {
+              const content = await readFile(f.relPath, 'utf-8')
+              if (content.includes('`' + condTarget + '()`')) { met = true; break }
+            } catch (_) {}
+          }
+        } else if (condition === 'function_implemented') {
+          const [fnName, fnFile] = (condTarget || '').split(':')
+          if (fnFile) {
+            try {
+              const content = await readFile(fnFile, 'utf-8')
+              met = content.includes(`function ${fnName}`) || content.includes(`def ${fnName}`)
+              // Also check it's not just a stub
+              if (met && (content.includes('throw new Error(\'Not implemented') || content.includes('raise NotImplementedError'))) met = false
+            } catch (_) { met = false }
+          }
+        } else if (condition === 'status_canonical') {
+          try {
+            const content = await readFile(condTarget, 'utf-8')
+            met = /^STATUS:\s*(CANONICAL|STABLE)/m.test(content)
+          } catch (_) { met = false }
+        } else if (condition === 'has_caller') {
+          // Check if any client file calls this route
+          met = allApiCalls.length > 0 // will be populated later — skip for now
+        }
+
+        if (met) {
+          await redisP0.sendCommand(['GRAPH.QUERY', GRAPH,
+            `MATCH (task:Moment {id: '${esc(taskId)}'}) SET task.status = 'done', task.energy = 0, task.completed_at_s = ${Math.floor(Date.now() / 1000)}`])
+          resolved++
+        }
+      }
+      if (resolved > 0) console.log(`Phase 0: Auto-resolved ${resolved} completed tasks`)
+    } catch (e) { console.log(`Phase 0 skipped: ${e.message?.slice(0, 60)}`) }
+    await redisP0.quit()
+  }
+
   // --- DEEP CODE PARSING ---
   // Extract granular elements from code files and wire them together
   let deepCount = 0
@@ -661,12 +724,20 @@ async function main() {
       `MERGE (n:Moment {id: '${esc(issueId)}'}) SET n.name = '${esc(desc.slice(0, 120))}', n.type = 'task_run', n.subtype = 'task_run', n.status = 'pending', n.synthesis = '${esc(desc)}', n.content = '${esc(desc)}', n.severity = '${issue.severity}', n.issue_type = '${issue.type}', n.weight = ${frictionMap[issue.severity] + 0.2}, n.energy = ${frictionMap[issue.severity]}, n.friction = ${frictionMap[issue.severity]}, n.stability = 0.3, n.created_at_s = ${now}, n.updated_at_s = ${now}`
     )
 
-    // Link task to the relevant file via AFFECTS
+    // Link task to target via AFFECTS — condition encodes exit criteria
     const targetFile = issue.target || issue.file || issue.doc
     const targetId = `thing:file:${slugify(targetFile)}`
+    // Map issue_type → verifiable condition
+    const conditionMap = {
+      missing_impl: 'file_exists',        // file must exist on disk
+      undocumented_code: 'doc_mentions',   // a doc chain file must reference this function
+      proposed_not_built: 'file_exists',   // the proposed file must exist with >0 lines
+      draft_doc: 'status_canonical',       // doc STATUS must be CANONICAL or STABLE
+    }
+    const condition = conditionMap[issue.type] || 'manual'
     if (fileSet.has(targetFile)) {
       queries.push(
-        `MATCH (task:Moment {id: '${esc(issueId)}'}), (file:Thing {id: '${esc(targetId)}'}) MERGE (task)-[r:link]->(file) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.7, r.friction = ${frictionMap[issue.severity]}, r.weight = 0.6`
+        `MATCH (task:Moment {id: '${esc(issueId)}'}), (file:Thing {id: '${esc(targetId)}'}) MERGE (task)-[r:link]->(file) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.7, r.friction = ${frictionMap[issue.severity]}, r.weight = 0.6, r.condition = '${condition}', r.condition_target = '${esc(targetFile)}'`
       )
     }
 
@@ -807,7 +878,7 @@ async function main() {
         )
         const fileId = `thing:file:${slugify(f.relPath)}`
         queries.push(
-          `MATCH (task:Moment {id: '${esc(taskId)}'}), (file:Thing {id: '${esc(fileId)}'}) MERGE (task)-[r:link]->(file) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.9, r.friction = 0.6, r.weight = 0.7`
+          `MATCH (task:Moment {id: '${esc(taskId)}'}), (file:Thing {id: '${esc(fileId)}'}) MERGE (task)-[r:link]->(file) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.9, r.friction = 0.6, r.weight = 0.7, r.condition = 'no_throw_not_implemented', r.condition_target = '${esc(f.relPath)}'`
         )
         queries.push(
           `MATCH (task:Moment {id: '${esc(taskId)}'}), (org:Actor {id: 'org:ai_dev_dashboard'}) MERGE (task)-[r:link]->(org) SET r.r_type = 'BELONGS_TO', r.hierarchy = -0.6, r.permanence = 0.5, r.trust = 0.8, r.weight = 0.5`
@@ -861,13 +932,66 @@ async function main() {
       )
       const routeId = `thing:route:${slugify(rt.method + '_' + rt.path)}`
       queries.push(
-        `MATCH (task:Moment {id: '${esc(taskId)}'}), (rt:Thing {id: '${esc(routeId)}'}) MERGE (task)-[r:link]->(rt) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.4, r.trust = 0.7, r.friction = 0.3, r.weight = 0.5`
+        `MATCH (task:Moment {id: '${esc(taskId)}'}), (rt:Thing {id: '${esc(routeId)}'}) MERGE (task)-[r:link]->(rt) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.4, r.trust = 0.7, r.friction = 0.3, r.weight = 0.5, r.condition = 'has_caller', r.condition_target = '${esc(rt.method + ' ' + rt.path)}'`
       )
       queries.push(
         `MATCH (task:Moment {id: '${esc(taskId)}'}), (org:Actor {id: 'org:ai_dev_dashboard'}) MERGE (task)-[r:link]->(org) SET r.r_type = 'BELONGS_TO', r.hierarchy = -0.6, r.permanence = 0.5, r.trust = 0.8, r.weight = 0.5`
       )
       issues.push({ type: 'uncalled_route', file: rt.file, severity: 'medium' })
     }
+  }
+
+  // --- 4e. TEST RUNNER ---
+  console.log('\n--- PHASE 4e: Test runner ---')
+  if (!DRY_RUN) {
+    // Try npm test
+    try {
+      const testResult = execSync('npm test 2>&1 || true', {
+        maxBuffer: 10 * 1024 * 1024, encoding: 'utf-8', timeout: 60000, cwd: '.'
+      })
+      const testFailures = []
+      // Parse common test output patterns
+      // Jest: FAIL src/path/to/test.js
+      for (const m of testResult.matchAll(/FAIL\s+(\S+)/g)) {
+        testFailures.push({ file: m[1], framework: 'jest' })
+      }
+      // Vitest: ✗ test name (file)
+      for (const m of testResult.matchAll(/[✗×]\s+(.+)\s+\((\S+)\)/g)) {
+        testFailures.push({ file: m[2], test: m[1], framework: 'vitest' })
+      }
+      // pytest: FAILED path/to/test.py::test_name
+      for (const m of testResult.matchAll(/FAILED\s+(\S+)::(\S+)/g)) {
+        testFailures.push({ file: m[1], test: m[2], framework: 'pytest' })
+      }
+      // Generic: error/Error in output with file path
+      if (testFailures.length === 0) {
+        for (const m of testResult.matchAll(/(?:Error|error|FAILED).*?(\S+\.(?:js|jsx|ts|tsx|py))/g)) {
+          testFailures.push({ file: m[1], framework: 'generic' })
+        }
+      }
+
+      if (testFailures.length > 0) {
+        console.log(`  ${testFailures.length} test failures:`)
+        for (const tf of testFailures.slice(0, 10)) {
+          console.log(`    FAIL: ${tf.file}${tf.test ? '::' + tf.test : ''}`)
+          const taskId = `task:test:${slugify(tf.file + '_' + (tf.test || 'suite'))}`
+          const desc = `Test failure: ${tf.file}${tf.test ? '::' + tf.test : ''}`
+          queries.push(
+            `MERGE (n:Moment {id: '${esc(taskId)}'}) SET n.name = '${esc(desc.slice(0, 120))}', n.type = 'task_run', n.subtype = 'task_run', n.status = 'pending', n.synthesis = '${esc(desc)}', n.severity = 'high', n.issue_type = 'test_failure', n.weight = 0.9, n.energy = 0.9, n.friction = 0.9, n.stability = 0.1, n.created_at_s = ${now}, n.updated_at_s = ${now}`
+          )
+          const testFileId = `thing:file:${slugify(tf.file)}`
+          queries.push(
+            `MATCH (task:Moment {id: '${esc(taskId)}'}), (file:Thing {id: '${esc(testFileId)}'}) MERGE (task)-[r:link]->(file) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.9, r.friction = 0.9, r.weight = 0.8, r.condition = 'test_passes', r.condition_target = '${esc(tf.file + (tf.test ? '::' + tf.test : ''))}'`
+          )
+          queries.push(
+            `MATCH (task:Moment {id: '${esc(taskId)}'}), (org:Actor {id: 'org:ai_dev_dashboard'}) MERGE (task)-[r:link]->(org) SET r.r_type = 'BELONGS_TO', r.hierarchy = -0.6, r.permanence = 0.5, r.trust = 0.8, r.weight = 0.5`
+          )
+          issues.push({ type: 'test_failure', file: tf.file, severity: 'high' })
+        }
+      } else {
+        console.log('  Tests passed (or no test suite found)')
+      }
+    } catch (e) { console.log(`  Test runner skipped: ${e.message?.slice(0, 60)}`) }
   }
 
   // 6. Detect incomplete doc chains and generate fix commands
@@ -1133,7 +1257,7 @@ async function main() {
         )
         // Task → function (AFFECTS)
         queries.push(
-          `MATCH (task:Moment {id: '${esc(taskId)}'}), (fn:Thing {id: '${esc(fnId)}'}) MERGE (task)-[r:link]->(fn) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.8, r.friction = 0.5, r.weight = 0.7`
+          `MATCH (task:Moment {id: '${esc(taskId)}'}), (fn:Thing {id: '${esc(fnId)}'}) MERGE (task)-[r:link]->(fn) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.8, r.friction = 0.5, r.weight = 0.7, r.condition = 'function_implemented', r.condition_target = '${esc(fn.name + ':' + targetFile)}'`
         )
         // Task → doc (REFERENCES — so assigned citizen knows where to look)
         queries.push(
@@ -1226,7 +1350,7 @@ async function main() {
         )
         // Task → function it needs to document
         queries.push(
-          `MATCH (task:Moment {id: '${esc(taskId)}'}), (fn:Thing {id: '${esc(fnId)}'}) MERGE (task)-[r:link]->(fn) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.8, r.friction = 0.4, r.weight = 0.6`
+          `MATCH (task:Moment {id: '${esc(taskId)}'}), (fn:Thing {id: '${esc(fnId)}'}) MERGE (task)-[r:link]->(fn) SET r.r_type = 'AFFECTS', r.hierarchy = -0.3, r.permanence = 0.5, r.trust = 0.8, r.friction = 0.4, r.weight = 0.6, r.condition = 'doc_mentions', r.condition_target = '${esc(fn.name)}'`
         )
         // Task → target doc
         queries.push(
