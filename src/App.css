@@ -1,0 +1,28 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; overflow: hidden; }
+.app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+.toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: #1a1a1a; border-bottom: 1px solid #333; z-index: 10;
+}
+.toolbar select { background: #222; color: #eee; border: 1px solid #444; padding: 6px 8px; border-radius: 4px; }
+.toolbar input {
+  flex: 1; background: #222; color: #eee; border: 1px solid #444;
+  padding: 6px 10px; border-radius: 4px; font-family: monospace; font-size: 13px;
+}
+.toolbar button {
+  background: #3b82f6; color: white; border: none; padding: 6px 16px;
+  border-radius: 4px; cursor: pointer; font-weight: bold;
+}
+.toolbar button:hover { background: #2563eb; }
+.tick-controls { display: flex; gap: 4px; }
+.tick-controls button {
+  background: #333; color: #ccc; border: 1px solid #555; padding: 4px 10px;
+  border-radius: 4px; cursor: pointer; font-size: 12px;
+}
+.tick-controls button:hover { background: #444; }
+.tick-controls button.active { background: #16a34a; color: white; border-color: #16a34a; }
+.status { color: #888; font-size: 12px; white-space: nowrap; }
+.legend { display: flex; gap: 10px; font-size: 12px; margin-left: auto; }
+svg { flex: 1; cursor: grab; }
+svg:active { cursor: grabbing; }

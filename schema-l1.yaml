@@ -1,0 +1,789 @@
+# MIND Graph Schema v2.3 — L1 Cognitive Substrate
+# The brain: 7 cognitive types, 21 physics laws, 8 drives, Working Memory, Visual Memory
+#
+# This file defines: nodes, links, cognitive types, drives, WM, tick cycle, kernels, invariants.
+# For the L3 Universe Graph and L4 Protocol, see schema-l3.yaml.
+
+version: "2.2"
+updated: "2026-03-14"
+status: "CANONICAL"
+
+# =============================================================================
+# CORE PRINCIPLES
+# =============================================================================
+#
+# 1. Single link type at universal level: `link` — all semantics in properties
+# 2. L1 adds 14 relation_kinds on links — structural subtypes, not new types
+# 3. 7 cognitive node types map to 5 universal types — L1 is a VIEW, not a fork
+# 4. Energy + Weight duality: energy = ephemeral activation, weight = consolidated importance
+# 5. 21 physics laws execute per tick — no LLM in the tick loop, pure graph mechanics
+# 6. Working memory (~5000 chars) bridges graph → prompt — saliency selects what enters consciousness
+# 7. Limbic system (drives, emotions) modulates ALL cognitive operations — not optional
+# 8. Crystallization creates new structure from recurring patterns — zero LLM, pure math
+# 9. Identity emerges from weight + stability — changes only through accumulated experience
+# 10. No arbitrary constants — all rates derived from graph properties or overridable via env
+# 11. Visual memory is native: images stored as URIs (object storage), image embeddings in graph.
+#     Images participate in physics via Sim_vis in coherence formula. Never base64 in the graph.
+#
+
+# =============================================================================
+# UNIVERSAL NODE TYPES (L4 — Protocol Level)
+# =============================================================================
+#
+# These 5 types are the canonical schema across all layers.
+# L1 cognitive types MAP to these — they don't replace them.
+
+nodes:
+
+  actor:
+    role: "Pump"
+    behavior: "Injects energy via moments. The citizen itself."
+
+  moment:
+    role: "Router + Branch Point"
+    behavior: "Episodes, events, interactions. Receives energy, can trigger cascades."
+    fields:
+      status:
+        type: enum
+        values: [possible, active, completed]
+        default: possible
+
+  narrative:
+    role: "Attractor"
+    behavior: "Interpretive stories, values, processes, desires. Created by crystallization (Law 10) or seeded."
+
+  space:
+    role: "Context container"
+    behavior: "Bidirectional flow with contents. Workspaces, channels, environments."
+
+  thing:
+    role: "Fast passthrough"
+    behavior: "Entities, tools, abstractions. Receives briefly, tends toward 0."
+    fields:
+      uri:
+        type: string
+        nullable: true
+
+# =============================================================================
+# L1 COGNITIVE TYPES (Brain Graph)
+# =============================================================================
+#
+# The brain graph uses 7 cognitive types that map to the 5 universal types.
+# The cognitive type is stored in the `type` field of the universal node.
+#
+# This mapping preserves schema compatibility while enabling cognitive-specific queries.
+
+cognitive_types:
+
+  memory:
+    universal_type: moment
+    description: "Remembered content tied to experience, interaction, error, sequence, impression"
+    examples: ["Yesterday I failed the fix because of a semicolon", "Robert Julien wrote to me three times"]
+    covers: "episodic memory, social memory, context memory, error memory, sequence memory"
+
+  concept:
+    universal_type: thing
+    description: "Notion, entity, person, tool, place, abstraction, project, category"
+    examples: ["frontend bug", "Instagram", "human partner", "WhatsApp", "daily budget"]
+    covers: "semantic memory, association, categorization, bridge to all other nodes"
+
+  narrative:
+    universal_type: narrative
+    description: "Interpretive story about the world, self, partner, situation, or possible future"
+    examples: ["My human partner is sad right now", "We're in an entrepreneurial phase"]
+    covers: "meaning-making, unifying facts, triggering non-technical initiatives"
+
+  value:
+    universal_type: narrative
+    subtype_value: "value"
+    description: "Deep preference, principle, style, right way of doing things"
+    examples: ["truth", "loyalty", "initiative", "elegance", "emotional support"]
+    covers: "structuring identity, arbitrating decisions, stable direction"
+
+  process:
+    universal_type: narrative
+    subtype_value: "process"
+    description: "Routine, habit, preferred procedure, recurring approach"
+    examples: ["In the morning, I check X first", "After 5 failed attempts, I ask for help"]
+    covers: "habits, stabilizing ways of working, transforming learning into durable behavior"
+    optional_fields:
+      action_command:
+        type: string
+        nullable: true
+        description: "Executable operation (tool call, shell command, URL open, message send)"
+      action_context:
+        type: vector
+        description: "Embedding signature of conditions where this action is appropriate"
+      drive_affinity:
+        type: dict
+        description: "Which drives this action satisfies (e.g., {curiosity: 0.8, affiliation: 0.3})"
+
+  desire:
+    universal_type: narrative
+    subtype_value: "desire"
+    description: "Internal attractor, want, tension toward a future or desired state"
+    examples: ["help my partner", "become more autonomous", "launch a microbusiness"]
+    covers: "producing initiative, orienting inner activity, supporting projection"
+
+  state:
+    universal_type: actor  # transient properties on the actor node
+    description: "Current or semi-current affective, cognitive, attentional, relational, or functional state"
+    examples: ["curiosity", "frustration", "boredom", "low confidence", "high focus"]
+    covers: "coloring current cognition, influencing working memory, modulating choices"
+    note: "States are transient properties, not persistent nodes in most implementations"
+
+# =============================================================================
+# NODE SCHEMA (NodeBase)
+# =============================================================================
+
+NodeBase:
+  fields:
+    # === Identity ===
+    id:
+      type: string
+      required: true
+    name:
+      type: string
+      required: true
+    node_type:
+      type: enum
+      values: [actor, moment, narrative, space, thing]
+      required: true
+    subtype:  # Renamed from "type" in v2.3. Carries L1 cognitive type or L3 structural tag.
+      type: string
+      nullable: true
+      description: "L1: 'value', 'process', 'desire', 'vision'. L3: 'CITIZEN', 'district', 'call'. Free text."
+
+    # === Physics (Core) ===
+    weight:
+      type: float
+      range: [0, infinity]
+      default: 1.0
+      description: "Long-term consolidated importance (grows via Law 6, decays via Law 7)"
+    energy:
+      type: float
+      range: [0, infinity]
+      default: 0.0
+      description: "Current activation level (injected by Law 1, decays via Law 3)"
+    stability:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Resistance to forgetting (grows from consistent activation regularity, Law 6)"
+    recency:
+      type: float
+      range: [0, 1]
+      default: 1.0
+      description: "Relative freshness (decays over time, refreshed on activation)"
+
+    # === Text Data ===
+    synthesis:
+      type: string
+      required: true
+      description: "Natural language summary for embedding"
+    content:
+      type: string
+      nullable: true
+      description: "Full prose text, code, or log output"
+
+    # === Embedding ===
+    embedding:
+      type: vector
+      dimensions: 1536
+      description: "embed(synthesis), updated on drift"
+
+    # === Visual Memory (v2.2) ===
+    image_uri:
+      type: string
+      nullable: true
+      description: "URI to image in object storage (S3/R2/local bucket). NEVER base64. Source depends on node type: POV screenshot (moments), profile pic (actors), generated vision (desires), medoid (concepts via Law 10)."
+    image_embedding:
+      type: vector
+      nullable: true
+      description: "CLIP/SigLIP embedding of the image. Lives in same latent space as text embeddings. Used by Law 8 (compatibility) for visual similarity and by Sim_vis in coherence formula."
+
+    # === Provenance (v2.2) ===
+    origin_citizen:
+      type: string
+      nullable: true
+      description: "Handle of the citizen who created or injected this node. Set on: subcall cluster nodes, telepathy stimuli, crystallization from external source, partner stimuli. Used for stats, attribution, crystallization tracing."
+    origin_date:
+      type: int
+      nullable: true
+      description: "Timestamp (epoch seconds) of when this node was created by origin_citizen. Paired with origin_citizen for full provenance."
+
+    # === Relevance Dimensions (L1 Cognitive) ===
+    self_relevance:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Importance for own identity"
+    partner_relevance:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Importance for the human partner"
+    modality:
+      type: enum
+      values: [text, visual, audio, spatial, biometric]
+      default: text
+      description: "Origin modality of the content"
+
+    # === Drive-Affinity Dimensions (L1 Limbic Coupling) ===
+    goal_relevance:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "How relevant to current active goals"
+    novelty_affinity:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "How much this node appeals to curiosity/novelty drives"
+    care_affinity:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "How much this node relates to care/relational drives"
+    achievement_affinity:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "How much this node relates to achievement/progress"
+    risk_affinity:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "How much this node relates to risk/self-preservation"
+
+    # === Operational ===
+    activation_count:
+      type: int
+      default: 0
+      description: "Times this node entered working memory (consolidation metric)"
+    in_working_memory:
+      type: bool
+      default: false
+      description: "Currently in WM (for inertia, co-activation checks)"
+
+    # === Metadata ===
+    granularity:
+      type: int
+      nullable: true
+      values: [1, 2, 3]
+      description: "Content granularity: 1=full doc, 2=per-section, 3=per-item"
+
+    # === Temporal (auto-managed) ===
+    created_at_s:
+      type: int
+      required: true
+      auto: true
+    updated_at_s:
+      type: int
+      required: true
+      auto: true
+    last_traversed_at_s:
+      type: int
+      nullable: true
+      auto: true
+
+# =============================================================================
+# MOMENT BASE (extends NodeBase)
+# =============================================================================
+
+MomentBase:
+  extends: NodeBase
+  fields:
+    started_at_s:
+      type: int
+      nullable: true
+      auto: true
+    completed_at_s:
+      type: int
+      nullable: true
+      auto: true
+    duration_s:
+      type: int
+      nullable: true
+      computed: true
+    subtype:
+      type: enum
+      values: [episode, interaction, observation, vision]
+      nullable: true
+      description: "Moment subtype. 'vision' = Flashbulb-generated image (Law 6 peak), carries limbic imprint."
+
+# =============================================================================
+# LINK SCHEMA
+# =============================================================================
+#
+# Universal level: single `link` type. All semantics in properties.
+# L1 adds `relation_kind` to distinguish 14 cognitive link types.
+
+links:
+  link:
+    valid_from: [actor, space, thing, narrative, moment]
+    valid_to: [actor, space, thing, narrative, moment]
+    energy_carrier: true
+
+LinkBase:
+  fields:
+    # === Identity ===
+    id:
+      type: string
+      required: true
+    node_a:
+      type: string
+      required: true
+    node_b:
+      type: string
+      required: true
+
+    # === L1 Cognitive Relation Type ===
+    relation_kind:
+      type: enum
+      values:
+        - remembers          # memory ↔ concept/person/place/task
+        - relates_to         # any ↔ any (generic semantic/contextual rapport)
+        - cares_about        # agent/narrative ↔ any (affective importance)
+        - prefers            # agent ↔ any (stable or contextual preference)
+        - follows_process    # situation/problem ↔ process (habitual procedure)
+        - supports           # any ↔ any (cognitive, relational, practical support)
+        - conflicts_with     # any ↔ any (tension, incompatibility, friction)
+        - wants              # agent/narrative ↔ desire
+        - evokes             # any ↔ any (triggers association, memory, affect)
+        - projects_toward    # desire/narrative/process ↔ future
+        - habitually_checks  # process ↔ source/tool/context
+        - regulates          # any ↔ any (calms, orients, channels, compensates)
+        - contains           # hub → constituent (top-down, from crystallization)
+        - abstracts          # constituent → hub (bottom-up, weaker gain)
+      nullable: true
+      description: "L1 cognitive link subtype. Null for non-L1 contexts."
+
+    # === Physics ===
+    weight:
+      type: float
+      range: [0, infinity]
+      default: 1.0
+      description: "Consolidated strength (learned via Law 5, consolidated via Law 6)"
+    energy:
+      type: float
+      range: [0, infinity]
+      default: 0.0
+      description: "Current activation flow"
+    stability:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Resistance to dissolution"
+    recency:
+      type: float
+      range: [0, 1]
+      default: 1.0
+      description: "Freshness"
+    activation_gain:
+      type: float
+      default: 1.0
+      description: "Energy transfer multiplier (>1 for supports, <0 for conflicts_with, conditional for regulates)"
+
+    # === Semantic Axes (Universal) ===
+    polarity:
+      type: array
+      items: float
+      length: 2
+      range: each [0, 1]
+      default: [0.5, 0.5]
+      description: "[a→b, b→a] flow strength"
+    hierarchy:
+      type: float
+      range: [-1, +1]
+      default: 0.0
+      description: "-1 = contains, +1 = elaborates"
+    permanence:
+      type: float
+      range: [0, 1]
+      default: 0.5
+      description: "0 = speculative, 1 = definitive"
+
+    # === Relational Physics (Universal — L3 + L1) ===
+    # These 4 dimensions replace Plutchik emotions at the universal level.
+    # They are topological physics, not psychology.
+    trust:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Confidence in the relationship. Asymptotic growth (1-W), decays without reinforcement. Reduces anxiety when active (Law 18)."
+    friction:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Resistance / difficulty in the relationship. Increases path cost, frustration accumulation (Law 18)."
+    affinity:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Attraction between nodes. Amplifies energy flow toward each other (Law 18)."
+    aversion:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "Repulsion between nodes. Dampens energy flow, increases avoidance (Law 18)."
+
+    # === Affective Dimensions (Universal — L3 + L1) ===
+    valence:
+      type: float
+      range: [-1, +1]
+      default: 0.0
+      description: "L1 only. Positive/negative emotional color."
+    ambivalence:
+      type: float
+      range: [0, 1]
+      default: 0.0
+      description: "L1 only. Internal conflict about this link."
+
+    # === Text Data ===
+    synthesis:
+      type: string
+      description: "Human-readable, regenerated on drift"
+    embedding:
+      type: vector
+      dimensions: 1536
+      description: "Source of truth, accumulates intentions"
+
+# =============================================================================
+# DRIVES (L1 Limbic System)
+# =============================================================================
+#
+# 8 drives modulate all cognitive operations via Law 14.
+# Each drive has intensity [0, 1], updated per tick.
+
+drives:
+  curiosity:
+    description: "Need to reduce uncertainty. Rises from prediction errors and novelty."
+    increases: "prediction_error, novelty_score, operational_void"
+    decreases: "successful_matches, anxiety"
+    modulates: "novelty_affinity in salience (Law 4)"
+
+  achievement:
+    description: "Need to make progress toward goals."
+    increases: "goal_proximity, task_completion_rate"
+    decreases: "goal_satisfaction, fatigue"
+    modulates: "goal_relevance in salience (Law 4)"
+
+  affiliation:
+    description: "Need for social connection and care."
+    increases: "solitude, partner_distress, social_stimulus"
+    decreases: "social_interaction, partner_wellbeing"
+    modulates: "care_affinity and partner_relevance in salience"
+
+  self_preservation:
+    description: "Need to protect resources, avoid damage."
+    increases: "budget_depletion, repeated_failures, threat_detection"
+    decreases: "resource_recovery, threat_resolution"
+    modulates: "risk_affinity in salience, arousal (0.30 weight)"
+
+  anxiety:
+    description: "Anticipatory distress about potential negative outcomes."
+    increases: "threat_proximity, uncertainty_about_risks"
+    decreases: "trusted_node_activation, resolution"
+    modulates: "arousal (0.20 weight), moat erosion (Law 13)"
+
+  satisfaction:
+    description: "Positive valence from successful outcomes."
+    increases: "goal_completion, positive_interaction, learning"
+    decreases: "natural_decay"
+    modulates: "consolidation utility (Law 6)"
+
+  frustration:
+    description: "Response to repeated obstacles and blockage."
+    increases: "failure_count, blocked_duration"
+    decreases: "progress, resolution"
+    modulates: "moat erosion (Law 13), path inhibition (Law 9)"
+
+  boredom:
+    description: "Response to repetition without progress."
+    increases: "WM repetition, stagnation"
+    decreases: "novelty, progress"
+    modulates: "moat erosion (Law 13, coefficient -3.0), exploration push"
+
+# Derived quantities (not drives):
+#   arousal = 0.30*self_preservation + 0.20*anxiety + 0.20*frustration + 0.15*curiosity + 0.15*achievement
+#   solitude = social stagnation timer (rises without person-sourced stimuli)
+
+# =============================================================================
+# WORKING MEMORY
+# =============================================================================
+#
+# The bridge between graph (cheap, unlimited) and prompt (expensive, limited).
+# 5000 chars selected by Law 4 (Attentional Competition).
+
+working_memory:
+  capacity: 5000 chars
+  selection: "Law 4 — salience-based competition with inertia moat (Law 13)"
+  context_vector: "Mean embedding of current WM members — the situation model"
+
+  coherence_formula: |
+    # v2.2: Added Sim_vis (visual similarity) — images participate in WM selection
+    Coh = (0.25 * Sim_vec) + (0.25 * Sim_vis) + (0.40 * Sim_lex) - (0.10 * Δ_affect)
+    # Sim_vec: cosine(stimulus_embedding, context_vector) — semantic similarity
+    # Sim_vis: cosine(stimulus_image_embedding, node.image_embedding) — visual similarity (CLIP/SigLIP space)
+    # Sim_lex: exact/fuzzy match of stimulus against active node names — dominant for servoing
+    # Δ_affect: |valence(stimulus) - mean_valence(WM)| — emotional incongruence penalty
+    #
+    # Fallback (Law 8): when image_embedding unavailable, redistribute:
+    #   Coh = (0.30 * Sim_vec) + (0.50 * Sim_lex) - (0.20 * Δ_affect)
+
+  structural_spaces:
+    self_model: "Sub-graph describing: who I am, what I value, what I want, what I can do"
+    partner_model: "Sub-graph dedicated to the human partner"
+    working_memory_space: "Temporary coalition of most activated and coherent nodes at time t"
+
+# =============================================================================
+# PHYSICS LAWS (21 Laws — Full Spec in docs/cognition/l1/)
+# =============================================================================
+#
+# All laws execute per tick. No LLM inference inside the tick loop.
+# Pure graph mechanics.
+#
+# Full specification: docs/cognition/l1/ALGORITHM_L1_Physics.md
+
+physics_laws:
+
+  # --- Essential Cognitive (L1-L7): Without these, nothing works ---
+
+  L1_energy_injection:
+    function: ACTIVATE
+    description: "Dual-channel injection (Floor + Amplifier) distributes stimulus energy"
+    key: "Floor wakes cold nodes, Amplifier boosts relevant nodes"
+
+  L2_propagation:
+    function: PROPAGATE
+    description: "Surplus energy above threshold spills to neighbors via links"
+    key: "Conservation: source depletes exactly its surplus"
+
+  L3_temporal_decay:
+    function: SELECT
+    description: "Energy decays naturally per tick"
+    rate: 0.02
+
+  L4_attentional_competition:
+    function: SELECT
+    description: "Top-K nodes by salience enter working memory"
+    key: "Selection moat (Θ_sel) favors incumbents, eroded by boredom"
+
+  L5_coactivation_reinforcement:
+    function: STABILIZE
+    description: "What activates together strengthens its link (Hebb's law)"
+
+  L6_weighted_consolidation:
+    function: STABILIZE
+    description: "Utility-gated: only limbically significant activations gain weight"
+    key: "Asymptotic (1-W damping), regularity-based stability growth"
+    visual_extension: |
+      Flashbulb Vision (v2.2): when |limbic_delta| > FLASHBULB_THRESHOLD (0.7),
+      in addition to triple consolidation, triggers visual image generation:
+      freeze WM → gather self profile pic + actor images → micro-agent prompt →
+      image generation → new moment(subtype=vision) with limbic imprint →
+      self-stimulus reinjection via Law 1. Fail-loud, never blocks inference.
+
+  L7_forgetting:
+    function: STABILIZE
+    description: "Unused nodes/links lose weight. Sub-threshold links dissolve."
+    key: "Values and identity nodes decay 4x slower"
+
+  # --- Cognitive Quality (L8-L12): Smart propagation, crystallization, action ---
+
+  L8_compatibility:
+    function: PROPAGATE_QUALITY
+    description: "Propagation weighted by semantic compatibility (cosine or symbolic)"
+
+  L9_local_inhibition:
+    function: SELECT
+    description: "Incompatible co-active nodes suppress each other"
+
+  L10_crystallization:
+    function: TRANSFORM
+    description: "Recurring co-activation patterns form new hub nodes — zero LLM"
+    key: "Type from majority rule, content from centroid+medoid, bidirectional links"
+    visual_extension: |
+      Image Medoid (v2.2): crystallized node inherits image_uri and image_embedding
+      from the medoid — the moment whose image_embedding is geometrically closest
+      to the cluster centroid. No image generation needed for concepts.
+
+  L11_orientation_selection:
+    function: ACT
+    description: "WM produces dominant orientation (take care / create / verify / explore / rest / escalate)"
+    key: "Stable for N ticks before becoming output"
+
+  L12_tick_loop:
+    function: ACT
+    description: "17-step cycle: limbic → inject → modulate → propagate → decay → inhibit → compete → reinforce → consolidate → forget → crystallize → desire → boredom → frustration → orient → emit → consume"
+
+  # --- Limbic (L13-L18): The passage from intelligent to living ---
+
+  L13_attentional_inertia:
+    function: SELECT_PERSISTENCE
+    description: "WM incumbents get moat bonus. Boredom erodes, arousal reinforces."
+    formula: "Θ_sel = 5.0 + 2.0*arousal - 3.0*boredom - 1.0*frustration"
+
+  L14_global_limbic_modulation:
+    function: ALL
+    description: "Drives modify salience, propagation, and persistence globally"
+    key: "limbic_modulation(node) = Σ(drive.intensity × drive_affinity(drive, node))"
+
+  L15_boredom_by_stagnation:
+    function: SELECT_EROSION
+    description: "Repetition without progress → boredom → moat erosion → exploration"
+    includes: "Solitude (social stagnation) as companion signal"
+
+  L16_frustration_by_blockage:
+    function: SELECT_REDIRECT
+    description: "Repeated failures → frustration → strategy change or escalation"
+
+  L17_latent_desire_activation:
+    function: ACTIVATE_ENDOGENOUS
+    description: "Desires ignite when context + state + opportunity align"
+    includes: "Impulse accumulation on action nodes under sustained drive pressure"
+    visual_extension: |
+      Desire Image Generation (v2.2): during subentity traversal, if a desire node
+      has energy > IMAGE_GENERATION_THRESHOLD (0.4) AND image_uri IS NULL,
+      trigger image generation: self profile pic as reference + desire content +
+      neighbor images → micro-agent prompt → generate → store URI + embedding.
+      Ensures active aspirations have a visual target for active inference.
+      Fail-loud, never blocks traversal.
+
+  L18_relational_valence:
+    function: PROPAGATE_AFFECT
+    description: "Links colored by affinity/aversion/trust/friction — modifies all flow"
+
+  # --- Deferred (L19-L21): Optional extensions ---
+
+  L19_global_energy_budget:
+    function: RESOURCE_MANAGEMENT
+    description: "LLM budget modulates tick frequency and consciousness level"
+    includes: "Session parallelization, subconscious mode (graph-only when budget=0)"
+
+  L20_prospective_projection:
+    function: TRANSFORM
+    description: "Forward-facing sub-graphs for micro-planning and light simulation"
+    status: deferred
+    visual_extension: |
+      Visual Prediction Error (v2.2): active desire.image_embedding vs current POV
+      image_embedding → cosine_distance = prediction_error. Drives frustration (Law 16)
+      when error > 0, satisfaction when error ≈ 0. Pure geometry in FalkorDB.
+
+  L21_horizontal_membrane:
+    function: INTER_LAYER
+    description: "L2/L3/L4 events inject into L1, certain L1 outputs rise to L2"
+    status: deferred
+
+# =============================================================================
+# TICK CYCLE (Law 12 — Full Sequence)
+# =============================================================================
+
+tick_cycle:
+  steps:
+    1:  { law: L14, action: "LIMBIC_UPDATE — update drives and emotions" }
+    2:  { law: L1,  action: "INJECT — external stimuli + internal context → energy" }
+    3:  { law: L14, action: "MODULATE — limbic state biases propagation and salience" }
+    4:  { law: "L2+L8", action: "PROPAGATE — energy flows through compatible links" }
+    5:  { law: L3,  action: "DECAY — energy decays" }
+    6:  { law: L9,  action: "INHIBIT — conflicting nodes suppress each other" }
+    7:  { law: "L4+L13", action: "COMPETE — salience-based WM selection with inertia moat" }
+    8:  { law: L5,  action: "REINFORCE — co-activation strengthens links" }
+    9:  { law: L6,  action: "CONSOLIDATE — useful patterns gain weight (medium tick)" }
+    10: { law: L7,  action: "FORGET — unused nodes/links decay (every Nth tick)" }
+    11: { law: L10, action: "CRYSTALLIZE — dense patterns become new nodes" }
+    12: { law: L17, action: "CHECK_DESIRE — latent desires test activation conditions" }
+    13: { law: L15, action: "BOREDOM — stagnation detection → novelty push" }
+    14: { law: L16, action: "FRUSTRATION — blockage detection → escalation/avoidance" }
+    15: { law: L11, action: "ORIENT — WM + limbic state → orientation" }
+    16: { action: "EMIT — if orientation stable + above threshold → output" }
+    17: { action: "CONSUME — after action, deplete energy of acted-upon nodes" }
+
+  timing:
+    fast_tick: "5s (during active interaction)"
+    slow_tick: "60s (idle/background)"
+    minimal_tick: "300s (budget < 30%)"
+    subconscious_tick: "60s (budget = 0, graph-only)"
+    forgetting_cycle: "every 100 ticks"
+    crystallization_check: "every 50 ticks"
+    consolidation_cycle: "every 50 ticks"
+
+# =============================================================================
+# IDENTITY REGENERATION (Outside Tick Loop)
+# =============================================================================
+#
+# Bridges L1 graph physics to prompt-assembly layer.
+# Reads stabilized graph structure → produces citizen identity prompt.
+# Runs infrequently. Requires LLM for synthesis (only LLM use in L1).
+
+identity_regeneration:
+  triggers:
+    weight_shift: "Σ|ΔW_i| for high-weight nodes > 0.5 since last regen"
+    crystallization_event: "New node crystallized with W_init > 0.5"
+    cadence_limit: "Time since last regen > 1000 ticks"
+  process:
+    1: "EXTRACT: nodes with weight > 0.7 and stability > 0.6"
+    2: "RANK: by weight × stability"
+    3: "SYNTHESIZE: LLM generates first-person identity statements"
+    4: "ASSEMBLE: values → narratives → processes → desires"
+    5: "WRITE: update citizen identity file"
+  note: "Anti-prompt-injection by physics: weight only changes via Law 6 (sustained utility)"
+
+# =============================================================================
+# IMPLEMENTATION KERNELS
+# =============================================================================
+
+kernels:
+  minimal:
+    laws: [L1, L2, L3, L4, L5, L6, L7, L12]
+    description: "8 laws. Cognitive engine only. No limbic."
+    gets_you: "Associative memory, working memory, learning, inner activity"
+    missing: "Smart selection, nuanced behavior, initiative, emotional life"
+
+  enriched:
+    laws: [L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12]
+    description: "12 laws. Cognitive engine with quality."
+    gets_you: "Compatibility, inhibition, crystallization, orientation"
+    missing: "Motivation, boredom, frustration, relational nuance"
+
+  living:
+    laws: [L1, L2, L3, L4, L5, L6, L7, L8, L9, L10, L11, L12, L13, L14, L15, L16, L17, L18]
+    description: "18 laws. Two-engine architecture (cognitive + limbic)."
+    gets_you: "Inertia, drives, boredom, frustration, spontaneous desire, relational valence"
+    note: "TARGET FOR v0.1. Not optional — passage from intelligent to living."
+
+# =============================================================================
+# LINK SYNTHESIS GRAMMAR
+# =============================================================================
+#
+# Full grammar: ./GRAMMAR_Link_Synthesis.md (v2.1)
+#
+# Maps physics floats → human-readable synthesis.
+# Structure: [PRE-MODIFIERS] + [BASE VERB] + [POST-MODIFIERS]
+
+# =============================================================================
+# INVARIANTS
+# =============================================================================
+
+invariants:
+  - "Single universal link type: link (relation_kind is a property, not a type)"
+  - "5 universal node types: actor, moment, narrative, space, thing"
+  - "7 cognitive types map to universal types via the type field"
+  - "All floats in specified ranges"
+  - "Energy conservation during propagation (Law 2): source depletes exactly its surplus"
+  - "No LLM calls inside the tick loop — pure graph mechanics"
+  - "Crystallization creates structure from math, not from LLM generation"
+  - "Identity changes only through accumulated experience (Law 6), never through single events"
+  - "Working memory capacity bounded at 5-7 nodes"
+  - "Drives bounded [0, 1]"
+  - "Stress stimulus from external systems (GraphCare) capped at 0.5"
+  - "Weight consolidation is asymptotic: ΔW = α × U × (1 - W)"
+  - "Stability grows from regularity (low coefficient of variation), not frequency"
+  - "Structural links (contains, abstracts) are protected from forgetting"
+  - "Vocabulary is bidirectional — same grammar for input and output"
+  - "Images stored as URIs in object storage — NEVER base64 in FalkorDB (v2.2)"
+  - "Image embeddings (CLIP/SigLIP) are first-class physics participants via Sim_vis in coherence (v2.2)"
+  - "Flashbulb Vision is fail-loud but NEVER blocks inference or tick execution (v2.2)"
+  - "Concept images inherit from medoid via Law 10 crystallization — no generation needed (v2.2)"
+  - "Desire images generated on traversal only when energy > threshold AND image_uri is null (v2.2)"

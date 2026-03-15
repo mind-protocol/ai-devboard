@@ -1,0 +1,17 @@
+
+> falkordb-browser@1.6.3 start
+> next start
+
+   ▲ Next.js 15.5.7
+   - Local:        http://localhost:3000
+   - Network:      http://10.255.255.254:3000
+
+ ✓ Starting...
+[Error: Could not find a production build in the '.next' directory. Try building your app with 'next build' before starting the production server. https://nextjs.org/docs/messages/production-start-no-build-id]
+[1]+  Exit 1                  npm start
+Status: 000
+FalkorDB Browser running on http://localhost:3000
+Connect to: localhost:6379
+Graph: org_ai_dev_dashboard
+
+Try: MATCH (n)-[r]->(m) RETURN n, r, m

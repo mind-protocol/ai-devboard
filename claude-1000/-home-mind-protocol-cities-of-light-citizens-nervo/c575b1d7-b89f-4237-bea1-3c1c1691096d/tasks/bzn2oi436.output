@@ -1,0 +1,10 @@
+   Collecting build traces ...
+
+> Build error occurred
+[Error: ENOENT: no such file or directory, copyfile '/home/mind-protocol/the-blood-ledger/falkordb-browser/.next/routes-manifest.json' -> '/home/mind-protocol/the-blood-ledger/falkordb-browser/.next/standalone/.next/routes-manifest.json'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'copyfile',
+  path: '/home/mind-protocol/the-blood-ledger/falkordb-browser/.next/routes-manifest.json',
+  dest: '/home/mind-protocol/the-blood-ledger/falkordb-browser/.next/standalone/.next/routes-manifest.json'
+}

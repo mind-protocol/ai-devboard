@@ -1,0 +1,60 @@
+
+# mind init v0.0.0
+Target: /home/mind-protocol/contre-terre
+Database: falkordb (graph: contre_terre)
+
+## Ecosystem
+Updating /home/mind-protocol/contre-terre/.mind
+✓ Ecosystem: 0 new, 98 updated, 2 preserved
+
+## Capabilities
+Updating /home/mind-protocol/contre-terre/.mind/capabilities
+✓ Capabilities: 0 new, 254 updated
+
+## Runtime
+Updating runtime...
+✓ Runtime: 0 new, 1 updated
+✓ Version: 1b2096af
+
+## AI Configs
+✓ .gemini/styleguide.md created
+
+## Skills
+✓ Skills: 21 synced to .claude/skills/
+
+## Database Config
+✓ Database: falkordb (graph: contre_terre)
+
+## Database Setup
+FalkorDB: already running
+Schema: 0 property + 0 vector indexes (768d)
+Database: falkordb ready (graph: contre_terre)
+
+## File Ingestion
+✓ Files: 2660 scanned, 0 created, 2660 updated
+
+## Capability Graph
+✓ Capabilities: 16 caps, 8 changed, 220 unchanged, 388 links
+
+## Environment
+✓ .env.mind.example created
+
+## MCP Server
+✓ .mcp.json configured (mind server)
+
+## Gitignore
+
+## Overview
+✓ Overview: map.md
+
+## Embeddings
+Embedding 66 nodes...
+                                                            ✓ Embeddings: 0 nodes
+
+## Health Checks
+✓ Health: 4 ok, 2 degraded, 2 critical
+✓ Tasks: 4 task_runs created
+
+---
+✓ mind initialized (v0.0.0, falkordb, graph: contre_terre)
+✓ SYNC updated: .mind/state/SYNC_Project_State.md

@@ -1,0 +1,26 @@
+behaviors:
+  capabilities_graph: true
+  citizen_seed: true
+  doc_ingest: true
+  embeddings: true
+  file_ingest: true
+  health_checks: true
+  know_all_citizens: true
+  mcp_config: true
+  mind_ingest: true
+  overview: true
+  relational_seeds: true
+database:
+  backend: falkordb
+  falkordb:
+    graph_name: mind_platform
+    host: localhost
+    port: 6379
+embedding:
+  dimension: 768
+  model: all-mpnet-base-v2
+  provider: local
+seed:
+  brain_json: data/base_seed_brain.json
+  script: runtime.l4.citizen_l1_ensure.bulk_ensure_citizens
+system_prompt_mode: project-team

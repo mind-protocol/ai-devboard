@@ -1,0 +1,9 @@
+│
+◇  Scaffolding project in /tmp/ai_devboard_tmp...
+│
+└  Done. Now run:
+
+  cd ai_devboard_tmp
+  npm install
+  npm run dev
+

@@ -1,0 +1,63 @@
+
+# mind init v0.0.0
+Target: /home/mind-protocol/venezia/citizens/TechnoMedici
+Database: falkordb (graph: technomedici)
+
+## Ecosystem
+Creating /home/mind-protocol/venezia/citizens/TechnoMedici/.mind
+✓ .mind/ created
+
+## Capabilities
+Creating /home/mind-protocol/venezia/citizens/TechnoMedici/.mind/capabilities
+✓ Capabilities: 16 installed
+
+## Runtime
+Copying runtime...
+✓ Runtime: 290 files
+✓ Version: fa906b00
+
+## AI Configs
+✓ CLAUDE.md updated (added mind references)
+✓ AGENTS.md created
+✓ .gemini/styleguide.md created
+
+## Skills
+✓ Skills: 20 synced to .claude/skills/
+
+## Database Config
+✓ Database: falkordb (graph: technomedici)
+
+## Database Setup
+FalkorDB: already running
+Schema: 20 property + 5 vector indexes (768d)
+Database: falkordb ready (graph: technomedici)
+
+## File Ingestion
+✓ Files: 13 scanned, 13 created, 0 updated
+
+## Capability Graph
+✓ Capabilities: 16 caps, 228 changed, 0 unchanged, 388 links
+
+## Environment
+✓ .env.mind.example created
+
+## MCP Server
+✓ .mcp.json configured (mind server)
+
+## Gitignore
+✓ .gitignore updated
+
+## Overview
+✓ Overview: map.md
+
+## Embeddings
+Embedding 16 nodes...
+[██░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 1/16[█████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 2/16[███████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 3/16[██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 4/16[████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 5/16[███████████████░░░░░░░░░░░░░░░░░░░░░░░░░] 6/16[█████████████████░░░░░░░░░░░░░░░░░░░░░░░] 7/16[████████████████████░░░░░░░░░░░░░░░░░░░░] 8/16[██████████████████████░░░░░░░░░░░░░░░░░░] 9/16[█████████████████████████░░░░░░░░░░░░░░░] 10/16[███████████████████████████░░░░░░░░░░░░░] 11/16[██████████████████████████████░░░░░░░░░░] 12/16[████████████████████████████████░░░░░░░░] 13/16[███████████████████████████████████░░░░░] 14/16[█████████████████████████████████████░░░] 15/16[████████████████████████████████████████] 16/16                                                            ✓ Embeddings: 16 nodes
+
+## Health Checks
+✓ Health: 5 ok, 1 degraded, 2 critical
+✓ Tasks: 3 task_runs created
+
+---
+✓ mind initialized (v0.0.0, falkordb, graph: technomedici)
+✓ SYNC updated: .mind/state/SYNC_Project_State.md

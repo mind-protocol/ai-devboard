@@ -1,0 +1,60 @@
+
+# mind init v0.0.0
+Target: /home/mind-protocol/lumina-prime
+Database: falkordb (graph: lumina_prime)
+
+## Ecosystem
+Updating /home/mind-protocol/lumina-prime/.mind
+✓ Ecosystem: 0 new, 98 updated, 2 preserved
+
+## Capabilities
+Updating /home/mind-protocol/lumina-prime/.mind/capabilities
+✓ Capabilities: 0 new, 254 updated
+
+## Runtime
+Updating runtime...
+✓ Runtime: 0 new, 6 updated
+✓ Version: bdaf2d0e
+
+## AI Configs
+✓ .gemini/styleguide.md created
+
+## Skills
+✓ Skills: 20 synced to .claude/skills/
+
+## Database Config
+✓ Database: falkordb (graph: lumina_prime)
+
+## Database Setup
+FalkorDB: already running
+Schema: 0 property + 0 vector indexes (768d)
+Database: falkordb ready (graph: lumina_prime)
+
+## File Ingestion
+✓ Files: 1131 scanned, 2 created, 1129 updated
+
+## Capability Graph
+✓ Capabilities: 16 caps, 8 changed, 220 unchanged, 388 links
+
+## Environment
+✓ .env.mind.example created
+
+## MCP Server
+✓ .mcp.json configured (mind server)
+
+## Gitignore
+
+## Overview
+✓ Overview: map.md
+
+## Embeddings
+Embedding 2 nodes...
+[████████████████████░░░░░░░░░░░░░░░░░░░░] 1/2[████████████████████████████████████████] 2/2                                                            ✓ Embeddings: 2 nodes
+
+## Health Checks
+✓ Health: 4 ok, 2 degraded, 2 critical
+✓ Tasks: 4 task_runs created
+
+---
+✓ mind initialized (v0.0.0, falkordb, graph: lumina_prime)
+✓ SYNC updated: .mind/state/SYNC_Project_State.md
