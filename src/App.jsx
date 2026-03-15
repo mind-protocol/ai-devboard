@@ -501,9 +501,13 @@ function App() {
       {view === 'brains' && (
         <div className="brains-view">
           {brainData.length === 0 && <div className="brain-empty">No active brains — citizens are dormant</div>}
-          {brainData.map(b => (
-            <div key={b.handle} className="brain-card">
-              <div className="brain-header">
+          {brainData.map(b => {
+            const isExpanded = expandedBrain === b.handle
+            const visibleNodes = isExpanded ? b.nodes : b.nodes.slice(0, 5)
+            return (
+            <div key={b.handle} className={`brain-card ${isExpanded ? 'brain-card-expanded' : ''}`}>
+              <div className="brain-header" onClick={() => setExpandedBrain(isExpanded ? null : b.handle)}>
+                <span className="brain-chevron">{isExpanded ? '\u25BC' : '\u25B6'}</span>
                 <span className="brain-handle">@{b.handle}</span>
                 <span className="brain-stats">{b.activeNodes} active / {b.totalNodes} total</span>
                 {b.place && <span className="brain-place" title="Current location">{b.place}</span>}
@@ -513,7 +517,7 @@ function App() {
                 </span>
               </div>
               <div className="brain-nodes">
-                {b.nodes.map((n, i) => (
+                {visibleNodes.map((n, i) => (
                   <div key={i} className="brain-node">
                     <span className="brain-node-energy" style={{ width: `${Math.min(n.energy * 200, 100)}%` }} />
                     <span className="brain-node-circle" style={{
@@ -540,9 +544,46 @@ function App() {
                     </span>
                   </div>
                 ))}
+                {!isExpanded && b.nodes.length > 5 && (
+                  <div className="brain-nodes-more">+{b.nodes.length - 5} more nodes</div>
+                )}
               </div>
+              {isExpanded && (
+                <div className="brain-expanded-section">
+                  <div className="brain-section-title">L2 Connections</div>
+                  {expandedL2 === null && <div className="brain-section-loading">Loading...</div>}
+                  {expandedL2 && expandedL2.l2Active && expandedL2.l2Active.length > 0 ? (
+                    <div className="brain-l2-list">
+                      {expandedL2.l2Active.map((link, i) => (
+                        <div key={i} className="brain-l2-item">
+                          <span className="brain-l2-target">{boldHandles(link.target || link.name || link.id || '')}</span>
+                          {link.type && <span className="brain-l2-type">{link.type}</span>}
+                          {link.weight != null && <span className="brain-l2-weight">W={typeof link.weight === 'number' ? link.weight.toFixed(1) : link.weight}</span>}
+                          {link.trust != null && <span className="brain-l2-trust">T={typeof link.trust === 'number' ? link.trust.toFixed(2) : link.trust}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  ) : expandedL2 && (
+                    <div className="brain-section-empty">No L2 connections found</div>
+                  )}
+                  {expandedL2 && expandedL2.neighbors && expandedL2.neighbors.length > 0 && (
+                    <>
+                      <div className="brain-section-title">Neighbors</div>
+                      <div className="brain-l2-list">
+                        {expandedL2.neighbors.map((nb, i) => (
+                          <div key={i} className="brain-l2-item">
+                            <span className="brain-l2-target">{boldHandles(nb.name || nb.handle || nb.id || '')}</span>
+                            {nb.type && <span className="brain-l2-type">{nb.type}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

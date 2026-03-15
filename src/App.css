@@ -154,7 +154,16 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
 .brain-header {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
   background: #1a1a1a; border-bottom: 1px solid #222;
+  cursor: pointer; user-select: none; transition: background 0.15s;
 }
+.brain-header:hover { background: #222; }
+.brain-chevron {
+  color: #666; font-size: 10px; flex-shrink: 0; width: 12px;
+  transition: color 0.15s;
+}
+.brain-header:hover .brain-chevron { color: #aaa; }
+.brain-card-expanded { border-color: #333; }
+.brain-card-expanded .brain-header { background: #1e1e2a; border-bottom-color: #333; }
 .brain-handle { color: #a78bfa; font-weight: bold; font-size: 14px; }
 .brain-stats { color: #888; font-size: 11px; }
 .brain-place { color: #3b82f6; font-size: 10px; background: #3b82f611; padding: 1px 6px; border-radius: 3px; }
@@ -208,6 +217,36 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
 .meta-e { color: #4ade80; font-family: monospace; font-size: 10px; }
 .meta-act { color: #fbbf24; font-size: 9px; }
 .meta-time { color: #888; font-size: 9px; }
+
+/* Brain card expand/collapse */
+.brain-nodes-more {
+  color: #555; font-size: 10px; padding: 4px 12px; font-style: italic;
+  border-top: 1px solid #1a1a1a;
+}
+.brain-expanded-section {
+  padding: 8px 12px; border-top: 1px solid #222; background: #0e0e14;
+}
+.brain-section-title {
+  color: #818cf8; font-size: 11px; font-weight: bold; text-transform: uppercase;
+  letter-spacing: 0.5px; margin: 8px 0 4px 0; padding-bottom: 4px;
+  border-bottom: 1px solid #222;
+}
+.brain-section-title:first-child { margin-top: 0; }
+.brain-section-loading { color: #555; font-size: 10px; font-style: italic; padding: 4px 0; }
+.brain-section-empty { color: #444; font-size: 10px; font-style: italic; padding: 4px 0; }
+.brain-l2-list { display: flex; flex-direction: column; gap: 2px; }
+.brain-l2-item {
+  display: flex; align-items: center; gap: 8px; padding: 3px 8px;
+  font-size: 11px; border-radius: 3px;
+}
+.brain-l2-item:hover { background: #1a1a2a; }
+.brain-l2-target { color: #ccc; flex: 1; }
+.brain-l2-type {
+  color: #888; font-size: 9px; background: #222; padding: 1px 5px;
+  border-radius: 2px; flex-shrink: 0;
+}
+.brain-l2-weight { color: #4ade80; font-family: monospace; font-size: 10px; flex-shrink: 0; }
+.brain-l2-trust { color: #60a5fa; font-family: monospace; font-size: 10px; flex-shrink: 0; }
 
 svg { flex: 1; cursor: grab; }
 svg:active { cursor: grabbing; }
