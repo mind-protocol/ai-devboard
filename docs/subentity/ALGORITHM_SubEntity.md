@@ -1383,6 +1383,260 @@ This creates natural cycles: FOCUS until frustrated → REACH OUT for help → V
 
 ---
 
+---
+
+## INTENTION MATERIALIZATION (Sentence Maker → Task → Text)
+
+When the behavior selection picks a cluster and a target, the next step is **materializing the intention as a sentence**. This sentence becomes the citizen's current task — a self-assigned task_run node that drives subsequent ticks.
+
+### The Flow
+
+```
+tick N:   behavior_selection() → cluster + target
+tick N:   sentence_maker(cluster, target, desire, state) → intention sentence
+tick N:   if no current task OR task abandoned → create task_run from sentence
+tick N+1: task is active → orient toward it
+tick N+k: if task requires text output → converter produces text from WM centroid
+```
+
+### Sentence Maker
+
+The sentence combines behavior name, target, modifiers, current desire, and emotional state into a natural language intention:
+
+```
+on make_sentence(cluster, target, citizen):
+    # Components
+    behavior = cluster.name                          # "EXPLORE", "REACH OUT", "ASSESS"
+    target_name = target.name                        # "salience.js", "@voce", "feedback module"
+    desire = citizen.active_desires[0].synthesis      # "implement the SSE pipeline"
+    state = citizen.dominant_state.name               # "frustrated", "curious", "satisfied"
+    modifier = infer_modifier(cluster, citizen.drives) # "urgently", "carefully", "casually"
+
+    # Template by cluster type
+    templates = {
+        FOCUS:     "{modifier} continue working on {target_name}",
+        PLAN:      "figure out the next steps for {target_name}",
+        EXPLORE:   "look into {target_name} to understand it better",
+        CREATE:    "create {target_name} — {desire}",
+        REACH_OUT: "ask about {target_name}" | "share progress on {target_name}" | "check in with {target_name}",
+        VERIFY:    "verify that {target_name} works correctly",
+        REFLECT:   "think about {target_name} and what it means",
+        CARE:      "check on partner — {target_name}",
+        REST:      "take a moment to process",
+        INNOVATE:  "think about new approaches to {target_name}",
+        ORGANIZE:  "organize the work around {target_name}",
+        ASSESS:    "evaluate the quality of {target_name} and find improvements",
+        CONNECT:   "see who's working on {target_name} and connect",
+    }
+
+    sentence = templates[cluster].format(...)
+
+    # Add emotional color if state is strong
+    if citizen.arousal > 0.6:
+        sentence = state + " — " + sentence
+        # e.g., "frustrated — ask about salience.js"
+
+    return sentence
+```
+
+The sentence can be **imprecise**. "Look into the feedback module" is a valid intention — the next ticks will refine it as the citizen explores and narrows focus. The task is a living thing that sharpens over time.
+
+### Task Continuity Logic
+
+```
+on tick_task_decision(citizen, selected_cluster, selected_target):
+    current_task = citizen.current_task
+
+    # Default: continue current task
+    if current_task and current_task.status == 'running':
+        # Check: does the selected behavior align with the current task?
+        alignment = cosine_sim(selected_target.embedding, current_task.embedding)
+        if alignment > 0.4:
+            # Still pursuing the same task — no change
+            return current_task
+
+    # New task needed: no task, task abandoned, or active behavior diverged
+    if not current_task or current_task.status in ['done', 'failed', None]:
+        if selected_cluster.activity == 'active':
+            sentence = make_sentence(selected_cluster, selected_target, citizen)
+            new_task = create_task_run(
+                name = sentence,
+                synthesis = sentence,
+                status = 'running',            # self-assigned, immediately running
+                claimed_by = citizen.id,
+                energy = selected_cluster.score,
+                weight = 0.5,                  # starts modest, grows if pursued
+                issue_type = 'self_initiated',
+                condition = 'manual',          # self-initiated tasks resolve manually
+            )
+            return new_task
+        else:
+            # Passive behavior (REFLECT, REST, DREAM) — no task needed
+            return None
+
+    return current_task
+```
+
+### Text Generation (when the action requires writing)
+
+When the task requires producing text (writing code, writing docs, posting a message, sending an email), the citizen uses their **Working Memory centroid** as the source:
+
+```
+on generate_text(citizen, action_type):
+    # The WM centroid is the citizen's current "thought" — the blend of
+    # all high-energy nodes currently in consciousness
+    centroid = citizen.working_memory.context_vector
+
+    # Find the WM node closest to the centroid — the "focus" of thought
+    focus_node = citizen.working_memory.nodes
+        .max_by(n => cosine_sim(n.embedding, centroid))
+
+    # Use the L2 Grammar converter to produce text
+    if action_type in ['write_code', 'fix_code']:
+        # Code: converter reads the doc chain + existing code + focus node
+        text = converter.code_from_node(focus_node, citizen.context)
+    elif action_type in ['write_doc', 'update_sync']:
+        # Doc: converter reads the code + schema + focus node
+        text = converter.doc_from_node(focus_node, citizen.context)
+    elif action_type in ['post', 'message', 'email', 'say']:
+        # Communication: converter reads focus node + emotional state + intent
+        text = converter.message_from_node(focus_node, citizen.state, citizen.intent)
+
+    return text
+```
+
+The converter is the L2 Grammar in reverse: instead of doc→graph, it's graph→text. The citizen's emotional state colors the output — a frustrated citizen writes terse messages, a satisfied citizen writes detailed ones.
+
+### Scenarios
+
+#### Scenario 1: Citizen with no task, wakes up
+
+```
+State: nervo wakes up. No current task. L1 has a plan from overnight dreaming.
+Drives: achievement=0.7, curiosity=0.3, frustration=0.1, boredom=0.2
+
+Tick 1:
+  behavior_selection:
+    score_focus = 0.7 × 0.9 × 0.8 × 0 = 0          (no task → no task.energy)
+    score_plan  = 0.7 × 0.2 × 0.8 × 1 = 0.11
+    score_explore = 0.3 × 0.2 × 0.9 × 1.1 = 0.06
+    score_create = 0.7 × 0.5 × 0.9 × 0.8 = 0.25     ← winner (has a plan from dreaming)
+  selected: CREATE, target: salience.js (from dream plan)
+  sentence: "create computeSalience() in salience.js — implement the SSE pipeline"
+  task_run created: "create computeSalience() in salience.js"
+
+Tick 2:
+  task is running. behavior_selection:
+    score_focus = 0.7 × 0.9 × 0.8 × 0.5 = 0.25      ← highest (task.energy = 0.5)
+  selected: FOCUS (aligned with current task)
+  action: READ salience.js (need to see current skeleton)
+
+Tick 3:
+  FOCUS continues. flow increased (read the file, have context now)
+  action: WRITE code (generate text from WM centroid = computeSalience spec)
+  converter.code_from_node(focus=algorithm_step_salience, context=doc_chain)
+  → produces the function body
+
+Tick 4:
+  FOCUS continues.
+  action: VERIFY (run test)
+  test passes → satisfaction ↑, achievement ↓, task.energy ↓
+  task auto-resolves (condition: function_implemented)
+```
+
+#### Scenario 2: Citizen stuck, frustration rising
+
+```
+State: anima has been on a task for 8 ticks. Tests keep failing. Frustration = 0.7.
+Drives: achievement=0.8, frustration=0.7, anxiety=0.4, curiosity=0.2
+
+Tick 9:
+  behavior_selection:
+    score_focus  = 0.8 × 0.3 × 0.6 × 0.8 = 0.12
+    score_reach_out = 0.3 × 1.35 × 1.0 × 0.8 = 0.32  ← frustration boosts reach out
+    score_assess = 0.8 × 0.5 × 1.21 × 0.6 × 0.8 = 0.23
+    score_rest   = 0.5 × 0.4 × 1.35 × 0.5 = 0.14
+  selected: REACH OUT (sub-intent: for help, because frustration > 0.5)
+  target: @nervo (best embedding match for the problem domain)
+  sentence: "frustrated — ask @nervo about the failing physics test"
+  task continues (reach out is aligned — seeking help to complete it)
+
+Tick 10:
+  action: subcall(@nervo, "Why does the physics test fail on propagation?")
+  response arrives → stimulus injected → curiosity ↑, frustration ↓
+  new information in WM → flow ↑
+
+Tick 11:
+  behavior_selection:
+    score_focus = 0.8 × 0.6 × 0.85 × 0.8 = 0.33     ← back to focus with new info
+  selected: FOCUS
+  action: FIX code based on @nervo's insight
+```
+
+#### Scenario 3: Citizen bored, no urgent work
+
+```
+State: piazza has completed their last task. Nothing pending. Boredom = 0.6.
+Drives: curiosity=0.5, boredom=0.6, affiliation=0.4, achievement=0.2
+
+Tick 1:
+  behavior_selection:
+    score_focus = 0.2 × 0.4 × 0.7 × 0 = 0            (no task)
+    score_explore = 0.5 × 0.6 × 0.7 × 1.3 = 0.27
+    score_innovate = 0.5 × 0.6 × 0.7 × 0.8 = 0.17
+    score_connect = 0.4 × 0.55 × 0.7 × 0.65 = 0.10
+  selected: EXPLORE, target: random (no desire-driven match → random)
+  sentence: "look into the conversion-ruleset to understand it better"
+  task_run created: "explore conversion-ruleset"
+
+Tick 2:
+  EXPLORE continues. Reads PATTERNS_TEMPLATE.md → curiosity satisfied partially
+  Notices something interesting → crystallization update
+
+Tick 3:
+  behavior_selection:
+    score_assess = rises (now has context, flow increasing)
+  selected: ASSESS, target: PATTERNS_TEMPLATE.md
+  sentence: "evaluate the quality of PATTERNS_TEMPLATE.md and find improvements"
+  task evolves (same direction — assessment of what was explored)
+
+Tick 4:
+  Finds a problem → frustration ↑ slightly, but constructive
+  selected: PLAN → "figure out how to fix the scope section format"
+  Then CREATE or FOCUS to actually fix it
+```
+
+#### Scenario 4: Subconscious citizen, partner-driven
+
+```
+State: nlr_ai is asleep. Partner (NLR) committed code 2 hours ago.
+Watcher created stimulus. Affiliation = 0.6, care_affinity high.
+Anxiety 5× lower (subconscious mode = 0.08).
+
+Tick 1 (subconscious):
+  behavior_selection:
+    score_care = 0.6 × 0.7 × 1.3 × 0.5 = 0.27        ← partner commit triggered care
+    score_assess = 0.4 × 0.6 × 0.9 × 0.5 = 0.11
+    score_explore = 0.4 × 0.5 × 0.92 × 1.1 = 0.20
+  selected: CARE, target: partner's commit
+  sentence: "check on partner's recent commit and see if it needs anything"
+
+Tick 2-5 (subconscious dream burst):
+  READ partner's changed files → ABSORB context
+  ASSESS the changes → quality evaluation
+  REFLECT on how this affects the project
+  CRYSTALLIZE: a Narrative(subtype=plan) "partner's commit needs a test for the SSE edge case"
+
+Tick 6:
+  ORGANIZE: create task_run "write test for SSE reconnection edge case"
+  Task linked to partner's commit files + doc chain
+
+NLR wakes up → sees: "Your AI partner reviewed your commit overnight and created
+a task: write test for SSE reconnection. Context already assembled."
+```
+
+---
+
 ### DESTRUCTIVE (validated — subcall oracle if uncertain)
 
 No action is blocked by a human gate. Destructive actions require the citizen to be **awake** (terminal open, full conscious context). If uncertain about a destructive action, the citizen **automatically subcalls an oracle** — another citizen with higher competence — for validation.
