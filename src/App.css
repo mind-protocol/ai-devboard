@@ -22,6 +22,12 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
 }
 .tick-controls button:hover { background: #444; }
 .tick-controls button.active { background: #16a34a; color: white; border-color: #16a34a; }
+.stream-indicator {
+  font-size: 10px; font-weight: bold; padding: 2px 8px; border-radius: 3px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.stream-indicator.live { background: #16a34a22; color: #4ade80; border: 1px solid #16a34a; }
+.stream-indicator.off { background: #55555522; color: #888; border: 1px solid #555; }
 .status { color: #888; font-size: 12px; white-space: nowrap; }
 .legend { display: flex; gap: 10px; font-size: 12px; margin-left: auto; }
 svg { flex: 1; cursor: grab; }

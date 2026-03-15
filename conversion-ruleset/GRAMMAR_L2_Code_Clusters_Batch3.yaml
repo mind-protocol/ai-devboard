@@ -1,0 +1,674 @@
+# Grammar L2 — Code Cluster Definitions (Batch 3)
+# Operational clusters: issues, errors, automation, reviews, migrations,
+# configs, secrets, doc chain links, tasks, and metrics.
+#
+# Each cluster = one concept → the graph nodes it creates,
+# the links between them, and the link dimension values.
+#
+# RULE: Each position in the doc chain gets a UNIQUE subtype
+# so we always know WHERE a node came from.
+
+version: "0.1"
+created: "2026-03-15"
+status: "DESIGNING"
+
+# =============================================================================
+# CLUSTER 1: ISSUE → "a bug report or feature request"
+# =============================================================================
+#
+# Justification: An issue is a discrete event with emotional/structural charge.
+# Bugs carry negative valence and friction (the pain). Feature requests carry
+# positive valence (the desire). Both are episodic — they happen at a point
+# in time and have a lifecycle.
+
+cluster_issue:
+  source_doc: "issue tracker (GitHub Issues, Linear, etc.)"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "issue"                  # UNIQUE: only issue tracker creates this
+      justification: "An issue is a discrete event with emotional/structural charge. It's episodic — filed at a point in time, resolved (or not) later. Not a persistent entity (Thing) and not an interpretive process (Narrative)."
+      fields:
+        content: "Issue title + body text"
+        weight: "Severity-proportional: critical=0.9, major=0.7, minor=0.4, trivial=0.2"
+        stability: "0.3 — issues are transient (they get resolved)"
+        energy: "0.7 — issues demand attention"
+        valence: "Negative for bugs (-0.6 to -0.9), positive for features (0.3 to 0.7)"
+        friction: "Pain of the bug or urgency of the request: 0.3 (cosmetic) to 0.9 (data loss)"
+
+  links_created:
+    - from: "Moment(subtype=issue)"
+      to: "Thing(subtype=code_file)"     # the files affected by the bug
+      r.type: "AFFECTS"
+      hierarchy: 0.3                     # issue is above the file (it judges it)
+      permanence: 0.4                    # link dissolves when issue closes
+      trust: 0.5                         # reporter may misidentify affected files
+      friction: 0.6                      # the pain point connecting issue to code
+      valence: -0.5                      # negative — something is wrong here
+
+    - from: "Moment(subtype=issue)"
+      to: "Space(subtype=module)"        # the module the issue belongs to
+      r.type: "BELONGS_TO"
+      hierarchy: -0.7                    # issue is contained by module
+      permanence: 0.5                    # stable while issue is open
+
+  example:
+    node:
+      id: "moment:issue_verb_determinism_bug"
+      subtype: "issue"
+      content: "BUG: synthesize_link_phrase() returns different verbs for identical dimension inputs when called rapidly"
+      weight: 0.8
+      valence: -0.7
+      friction: 0.8
+      energy: 0.7
+    link_to_file:
+      target: "thing:file_synthesis_py"
+      r.type: "AFFECTS"
+      hierarchy: 0.3
+      permanence: 0.4
+      trust: 0.5
+      friction: 0.6
+
+# =============================================================================
+# CLUSTER 2: ERROR_LOG → "a runtime error captured by monitoring"
+# =============================================================================
+#
+# Justification: An error is an episodic observation — a Moment that flashes
+# into existence, carries very high friction, and decays quickly. It's evidence
+# that something went wrong at a specific place and time.
+
+cluster_error_log:
+  source_doc: "monitoring / logging pipeline (Sentry, Datadog, stdout)"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "error_log"              # UNIQUE: only monitoring creates this
+      justification: "An error is an episodic observation — it happened at a specific time, in a specific function, with a specific stack trace. It's not a persistent artifact (Thing) or a process (Narrative). It's raw evidence."
+      fields:
+        content: "Error message + stack trace summary"
+        weight: "0.5 — individual errors are moderate; patterns of errors are high"
+        stability: "0.1 — errors are extremely transient (they flash and decay)"
+        energy: "0.9 — errors demand immediate attention"
+        friction: "0.9 — very high friction (something broke)"
+        valence: "-0.8 — strongly negative"
+
+  links_created:
+    - from: "Moment(subtype=error_log)"
+      to: "Thing(subtype=code_function)"  # the function where the error occurred
+      r.type: "EVIDENCES"
+      hierarchy: 0.2                      # error observes the function (slightly above)
+      permanence: 0.2                     # link is ephemeral — error fades fast
+      trust: 0.9                          # stack traces are high-fidelity evidence
+      friction: 0.9                       # maximum friction at the point of failure
+      evidence_ref:
+        kind: "stack_trace"
+        range: "runtime line reference"
+
+    - from: "Moment(subtype=error_log)"
+      to: "Moment(subtype=issue)"         # may link to an existing issue
+      r.type: "SUPPORTS"
+      hierarchy: -0.3                     # error supports (is evidence for) the issue
+      permanence: 0.3                     # link lives as long as both exist
+      trust: 0.8                          # error is strong evidence for the issue
+
+  example:
+    node:
+      id: "moment:error_synthesis_keyerror"
+      subtype: "error_log"
+      content: "KeyError: 'hierarchy' in synthesize_link_phrase() at synthesis.py:67 — dimension dict missing required key"
+      weight: 0.5
+      energy: 0.9
+      friction: 0.9
+      valence: -0.8
+    link_to_function:
+      target: "thing:func_synthesize_link_phrase"
+      r.type: "EVIDENCES"
+      hierarchy: 0.2
+      permanence: 0.2
+      trust: 0.9
+      friction: 0.9
+
+# =============================================================================
+# CLUSTER 3: LINTER_BOT → "an automated linting actor"
+# =============================================================================
+#
+# Justification: The linter is an entity that initiates action. It scans code,
+# produces error_logs, and monitors code_files. It's an Actor because it has
+# agency — it acts on its own schedule and produces effects in the graph.
+
+cluster_linter_bot:
+  source_doc: "CI/CD pipeline configuration (eslint, ruff, mypy, etc.)"
+
+  nodes_created:
+    - node_type: Actor
+      subtype: "linter_bot"             # UNIQUE: only CI lint config creates this
+      justification: "The linter is an entity that initiates action — it runs on schedule or on trigger, scans files, and produces findings. It has identity (name, version, config), persistence (it exists across runs), and agency (it acts without being asked)."
+      fields:
+        content: "Linter name, version, and rule configuration summary"
+        weight: "0.4 — linters are supporting infrastructure"
+        stability: "0.7 — linter configs are fairly stable"
+        energy: "Proportional to how recently it ran"
+        trust: "0.7 — linters are trusted but can produce false positives"
+
+  links_created:
+    - from: "Actor(subtype=linter_bot)"
+      to: "Moment(subtype=error_log)"    # errors the linter created
+      r.type: "CREATED"
+      hierarchy: 0.6                     # linter is above its findings (it produced them)
+      permanence: 0.3                    # link lives as long as the finding exists
+      trust: 0.7                         # linter findings have known false-positive rate
+      friction: 0.2                      # low friction — automated process
+
+    - from: "Actor(subtype=linter_bot)"
+      to: "Thing(subtype=code_file)"     # files the linter monitors
+      r.type: "MONITORS"
+      hierarchy: 0.4                     # linter watches from above
+      permanence: 0.8                    # monitoring relationship is persistent
+      trust: 0.6                         # linter may not catch everything
+      friction: 0.1                      # passive monitoring is low-friction
+
+  example:
+    node:
+      id: "actor:linter_ruff"
+      subtype: "linter_bot"
+      content: "Ruff v0.3.0 — Python linter with rules: E, F, W, I, N, UP, S, B, A, COM, C4"
+      weight: 0.4
+      stability: 0.7
+      energy: 0.5
+    link_to_error:
+      target: "moment:error_ruff_unused_import"
+      r.type: "CREATED"
+      hierarchy: 0.6
+      permanence: 0.3
+      trust: 0.7
+    link_to_file:
+      target: "thing:file_synthesis_py"
+      r.type: "MONITORS"
+      hierarchy: 0.4
+      permanence: 0.8
+
+# =============================================================================
+# CLUSTER 4: REVIEW_COMMENT → "a code review comment on a PR"
+# =============================================================================
+#
+# Justification: A review comment is a discrete feedback event — a Moment
+# where one Actor judges a piece of code. It carries trust (reviewer authority)
+# and friction (how contentious the feedback is).
+
+cluster_review_comment:
+  source_doc: "pull request review (GitHub, GitLab)"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "review_comment"         # UNIQUE: only PR reviews create this
+      justification: "A review comment is a discrete feedback event — episodic, timestamped, bound to a specific code location. It's not a persistent artifact (Thing) or an ongoing process (Narrative). It's a moment of judgment."
+      fields:
+        content: "Review comment text"
+        weight: "0.4 — individual comments are moderate; blocking comments are higher (0.7)"
+        stability: "0.4 — comments may be resolved or superseded"
+        energy: "0.6 — comments demand response"
+        friction: "Contentiousness: 0.1 (nitpick) to 0.8 (fundamental disagreement)"
+        trust: "Inherited from reviewer's trust score"
+
+  links_created:
+    - from: "Moment(subtype=review_comment)"
+      to: "Thing(subtype=code_function)"  # the function the comment targets
+      r.type: "CRITIQUES"
+      hierarchy: 0.4                      # comment judges from above
+      permanence: 0.3                     # link dissolves after resolution
+      trust: 0.6                          # reviewer trust propagated
+      friction: 0.5                       # review friction at point of contact
+
+    - from: "Moment(subtype=review_comment)"
+      to: "Actor"                         # the reviewer who wrote the comment
+      r.type: "AUTHORED_BY"
+      hierarchy: -0.5                     # comment is below its author
+      permanence: 0.6                     # authorship is semi-permanent
+      trust: 0.8                          # we trust the authorship attribution
+
+  example:
+    node:
+      id: "moment:review_synthesis_perf"
+      subtype: "review_comment"
+      content: "This loop allocates a new dict on every iteration. Pre-allocate outside the loop for 3x speedup."
+      weight: 0.5
+      friction: 0.3
+      energy: 0.6
+    link_to_function:
+      target: "thing:func_synthesize_link_phrase"
+      r.type: "CRITIQUES"
+      hierarchy: 0.4
+      permanence: 0.3
+      trust: 0.6
+    link_to_reviewer:
+      target: "actor:nervo"
+      r.type: "AUTHORED_BY"
+      hierarchy: -0.5
+      trust: 0.8
+
+# =============================================================================
+# CLUSTER 5: MIGRATION → "a database or schema migration"
+# =============================================================================
+#
+# Justification: A migration is a procedural narrative with risk. It has steps,
+# can be reversed (or not), and carries destructive potential. High friction
+# because it changes the ground truth. Low permanence because once applied,
+# the migration itself becomes historical.
+
+cluster_migration:
+  source_doc: "migration files (Alembic, Flyway, Prisma, raw SQL)"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "migration"              # UNIQUE: only migration files create this
+      justification: "A migration is a procedural narrative — it describes a sequence of schema changes to be applied. It's interpretive (it embodies a design decision about data shape) and procedural (it has ordered steps). Not a raw fact (Moment) or a static artifact (Thing)."
+      fields:
+        content: "Migration description (what schema changes are applied)"
+        weight: "0.7 — migrations are high-impact"
+        stability: "0.3 — migrations are one-shot (applied then frozen)"
+        energy: "0.8 at creation, decays to 0.0 after applied"
+        friction: "0.8 — high destructive potential"
+        permanence: "0.4 — the migration is transient; the schema change is permanent"
+
+  links_created:
+    - from: "Narrative(subtype=migration)"
+      to: "Thing(subtype=data_structure)"  # the schema it modifies
+      r.type: "MUTATES"
+      hierarchy: 0.3                       # migration acts on the data structure
+      permanence: 0.3                      # link is transient (migration is one-shot)
+      trust: 0.6                           # migrations can have bugs
+      friction: 0.8                        # high friction — destructive potential
+      valence: 0.0                         # neutral — migrations are necessary, not good/bad
+
+    - from: "Narrative(subtype=migration)"
+      to: "Narrative(subtype=algorithm)"   # the deploy narrative that triggers it
+      r.type: "TRIGGERED_BY"
+      hierarchy: -0.4                      # migration is triggered by deploy
+      permanence: 0.3                      # ephemeral link
+      trust: 0.7                           # deploy pipeline is trusted
+
+  example:
+    node:
+      id: "narrative:migration_add_valence_column"
+      subtype: "migration"
+      content: "ALTER TABLE links ADD COLUMN valence FLOAT DEFAULT 0.0 — adds emotional valence dimension to all link records"
+      weight: 0.7
+      friction: 0.8
+      energy: 0.8
+    link_to_schema:
+      target: "thing:struct_link_record"
+      r.type: "MUTATES"
+      hierarchy: 0.3
+      permanence: 0.3
+      trust: 0.6
+      friction: 0.8
+
+# =============================================================================
+# CLUSTER 6: CONFIG → "a configuration file"
+# =============================================================================
+#
+# Justification: A config is a concrete artifact — a Thing that exists on disk.
+# It rarely changes (high permanence) but carries low energy (it's not active).
+# It shapes behavior without being behavior itself.
+
+cluster_config:
+  source_doc: "configuration files (.env, .yaml, .toml, .json)"
+
+  nodes_created:
+    - node_type: Thing
+      subtype: "config"                 # UNIQUE: only config files create this
+      justification: "A config is a concrete artifact — it exists as a file on disk with specific key-value pairs. It's not episodic (Moment), not interpretive (Narrative). It's a static entity that shapes runtime behavior."
+      fields:
+        content: "Config file path and key summary"
+        weight: "0.4 — configs are important but not central"
+        stability: "0.8 — configs rarely change"
+        energy: "0.1 — low energy (passive, read-only at runtime)"
+        permanence: "0.9 — configs are long-lived"
+        evidence_ref:
+          repo: "mind-mcp"
+          path: "config/settings.yaml"
+          commit_sha: null
+          kind: "file_ref"
+
+  links_created:
+    - from: "Thing(subtype=config)"
+      to: "Space(subtype=environment)"    # the environment it configures
+      r.type: "CONFIGURES"
+      hierarchy: -0.3                     # config is below the environment (it serves it)
+      permanence: 0.9                     # config-environment binding is very stable
+      trust: 0.8                          # configs are the source of truth for env
+      friction: 0.1                       # low friction — configs are declarative
+
+    - from: "Thing(subtype=config)"
+      to: "Thing(subtype=code_file)"      # code files that read this config
+      r.type: "READ_BY"
+      hierarchy: -0.2                     # config is consumed by code
+      permanence: 0.7                     # reading relationship is fairly stable
+      trust: 0.7                          # code may not read all config keys
+
+  example:
+    node:
+      id: "thing:config_physics_yaml"
+      subtype: "config"
+      content: "config/physics.yaml — decay_rate: 0.02, tick_interval_ms: 1000, max_energy: 1.0"
+      weight: 0.4
+      stability: 0.8
+      energy: 0.1
+      evidence_ref: { repo: "mind-mcp", path: "config/physics.yaml", kind: "file_ref" }
+    link_to_env:
+      target: "space:env_production"
+      r.type: "CONFIGURES"
+      hierarchy: -0.3
+      permanence: 0.9
+      trust: 0.8
+    link_to_file:
+      target: "thing:file_physics_tick_py"
+      r.type: "READ_BY"
+      hierarchy: -0.2
+      permanence: 0.7
+
+# =============================================================================
+# CLUSTER 7: SECRET → "an API key, token, or password"
+# =============================================================================
+#
+# Justification: A secret is a highly protected artifact — a Thing with extreme
+# trust requirements on every link. Any public-facing link must carry aversion.
+# Secrets are the most sensitive nodes in the graph.
+
+cluster_secret:
+  source_doc: "secrets management (Vault, .env, AWS Secrets Manager)"
+
+  nodes_created:
+    - node_type: Thing
+      subtype: "secret"                 # UNIQUE: only secrets management creates this
+      justification: "A secret is a concrete artifact — it exists as a string value (key, token, password). It's a Thing because it's a defined entity with a specific value. The extreme trust and aversion constraints are carried on its links, not the node itself."
+      fields:
+        content: "Secret name (NEVER the value) — e.g., 'OPENAI_API_KEY'"
+        weight: "0.8 — secrets are critical (loss = breach)"
+        stability: "0.6 — secrets rotate periodically"
+        energy: "0.3 — secrets are passive until used"
+
+  links_created:
+    - from: "Thing(subtype=secret)"
+      to: "Thing(subtype=config)"         # the config file it lives in
+      r.type: "STORED_IN"
+      hierarchy: -0.5                     # secret is contained in config
+      permanence: 0.6                     # secret-config binding rotates
+      trust: 0.95                         # VERY high trust required
+      friction: 0.7                       # high friction — access must be controlled
+      aversion: 0.9                       # strong aversion to exposure
+
+    - from: "Thing(subtype=secret)"
+      to: "Actor"                         # the actor (human or bot) who owns it
+      r.type: "OWNED_BY"
+      hierarchy: -0.6                     # secret is subordinate to its owner
+      permanence: 0.7                     # ownership is fairly stable
+      trust: 0.95                         # only the owner should access
+      aversion: 0.8                       # strong aversion to unauthorized access
+
+  example:
+    node:
+      id: "thing:secret_openai_api_key"
+      subtype: "secret"
+      content: "OPENAI_API_KEY — OpenAI API access token for LLM calls"
+      weight: 0.8
+      stability: 0.6
+      energy: 0.3
+    link_to_config:
+      target: "thing:config_env_production"
+      r.type: "STORED_IN"
+      hierarchy: -0.5
+      permanence: 0.6
+      trust: 0.95
+      aversion: 0.9
+    link_to_owner:
+      target: "actor:nlr"
+      r.type: "OWNED_BY"
+      hierarchy: -0.6
+      trust: 0.95
+      aversion: 0.8
+
+# =============================================================================
+# CLUSTER 8: DOC_CHAIN_LINK → "the golden thread between doc chain positions"
+# =============================================================================
+#
+# This is NOT a node — it's a LINK subtype.
+# The doc chain itself is a graph structure: each position links to the next
+# via CHAIN_NEXT. This cluster defines that link type and its dimension values.
+#
+# The chain: OBJECTIVES → BEHAVIORS → ALGORITHM → IMPLEMENTATION → VALIDATION → HEALTH
+# Each link in the chain carries high permanence (the chain order is sacred)
+# and hierarchy that follows the chain direction.
+
+cluster_doc_chain_link:
+  source_doc: "doc chain structure (implicit in directory layout)"
+
+  nodes_created: []                      # NO new nodes — this cluster only defines links
+
+  links_created:
+    - from: "(any doc chain node at position N)"
+      to: "(doc chain node at position N+1)"
+      r.type: "CHAIN_NEXT"              # UNIQUE link type: the golden thread
+      hierarchy: "Follows chain order: from=-1 (abstract/why) to=+1 (concrete/how). OBJECTIVES→BEHAVIORS: -0.8, BEHAVIORS→ALGORITHM: -0.4, ALGORITHM→IMPLEMENTATION: 0.0, IMPLEMENTATION→VALIDATION: 0.4, VALIDATION→HEALTH: 0.8"
+      permanence: 0.95                   # the chain order is nearly immutable
+      trust: 0.9                         # the chain structure is authoritative
+      friction: 0.1                      # traversing the chain is low-friction
+      valence: 0.5                       # constructive — the chain builds coherence
+
+  chain_order:
+    - position: 0
+      subtype: "objective"
+      hierarchy_as_from: -0.8
+    - position: 1
+      subtype: "behavior"
+      hierarchy_as_from: -0.4
+    - position: 2
+      subtype: "algorithm"
+      hierarchy_as_from: 0.0
+    - position: 3
+      subtype: "code_file"
+      hierarchy_as_from: 0.4
+    - position: 4
+      subtype: "invariant"
+      hierarchy_as_from: 0.8
+    - position: 5
+      subtype: "health_check"
+      hierarchy_as_from: null            # terminal — no CHAIN_NEXT from here
+
+  example:
+    link:
+      from: "narrative:obj_zero_stored_verbs"
+      to: "moment:behavior_verb_on_the_fly"
+      r.type: "CHAIN_NEXT"
+      hierarchy: -0.8
+      permanence: 0.95
+      trust: 0.9
+      friction: 0.1
+      valence: 0.5
+    link2:
+      from: "moment:behavior_verb_on_the_fly"
+      to: "narrative:algo_link_synthesis_pipeline"
+      r.type: "CHAIN_NEXT"
+      hierarchy: -0.4
+      permanence: 0.95
+      trust: 0.9
+
+# =============================================================================
+# CLUSTER 9: TASK_NARRATIVE → "a work item"
+# =============================================================================
+#
+# Justification: Tasks are interpretive structures about work to be done.
+# They're Narratives because they describe an intended process with a goal.
+# Status maps to energy: pending=0.3 (latent), claimed=0.6 (active),
+# completed=0.0 (consumed — energy spent).
+
+cluster_task_narrative:
+  source_doc: "task management (Linear, GitHub Issues, .mind/tasks/)"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "task"                   # UNIQUE: only task systems create this
+      justification: "A task is an interpretive structure about work to be done. It's not a raw fact (Moment) or a persistent artifact (Thing). It's a narrative with a lifecycle: created → claimed → completed. Its energy maps to status."
+      fields:
+        content: "Task title and description"
+        weight: "Priority-proportional: P0=0.9, P1=0.7, P2=0.5, P3=0.3"
+        stability: "0.4 — tasks evolve (scope changes, gets broken down)"
+        energy: "Status-mapped: pending=0.3, claimed=0.6, in_review=0.5, completed=0.0"
+        status: "pending | claimed | in_progress | in_review | completed"
+
+  links_created:
+    - from: "Narrative(subtype=task)"
+      to: "Space(subtype=module)"        # the module this task belongs to
+      r.type: "BELONGS_TO"
+      hierarchy: -0.6                    # task is contained by module
+      permanence: 0.5                    # task-module binding is stable while open
+      trust: 0.7                         # task may be assigned to wrong module
+      friction: 0.2                      # low friction — organizational link
+
+    - from: "Narrative(subtype=task)"
+      to: "Actor"                        # the actor who claimed the task
+      r.type: "CLAIMED_BY"
+      hierarchy: -0.4                    # task is subordinate to its claimer
+      permanence: 0.4                    # reassignment is possible
+      trust: 0.6                         # claimed != completed
+      friction: 0.3                      # moderate friction — work is hard
+
+    - from: "Narrative(subtype=task)"
+      to: "Narrative(subtype=objective)"  # the objective this task serves
+      r.type: "SERVES"
+      hierarchy: -0.5                     # task serves the objective
+      permanence: 0.6                     # task-objective link is fairly stable
+      trust: 0.5                          # task may drift from objective
+
+  example:
+    node:
+      id: "narrative:task_implement_verb_synthesis"
+      subtype: "task"
+      content: "Implement synthesize_link_phrase() — the core function that generates verbs from 13 link dimensions"
+      weight: 0.9
+      energy: 0.6
+      status: "claimed"
+    link_to_module:
+      target: "space:module_grammar"
+      r.type: "BELONGS_TO"
+      hierarchy: -0.6
+      permanence: 0.5
+    link_to_actor:
+      target: "actor:nervo"
+      r.type: "CLAIMED_BY"
+      hierarchy: -0.4
+      trust: 0.6
+    link_to_objective:
+      target: "narrative:obj_zero_stored_verbs"
+      r.type: "SERVES"
+      hierarchy: -0.5
+
+# =============================================================================
+# CLUSTER 10: METRIC → "an observable measurement"
+# =============================================================================
+#
+# Justification: A metric is a concrete measurable artifact — a Thing with a
+# numeric value, a unit, and a timestamp. Its energy reflects recency (how
+# recently was it measured). Its weight reflects importance (how much do we
+# care about this number).
+
+cluster_metric:
+  source_doc: "metrics pipeline (Prometheus, coverage reports, build logs)"
+
+  nodes_created:
+    - node_type: Thing
+      subtype: "metric"                 # UNIQUE: only metrics pipeline creates this
+      justification: "A metric is a concrete measurable artifact — it has a name, a value, a unit, and a measurement time. It's a Thing because it's a defined, observable entity. Not episodic (Moment) because metrics persist and trend. Not interpretive (Narrative) because metrics are raw numbers."
+      fields:
+        content: "Metric name and current value (e.g., 'test_coverage: 87%')"
+        weight: "Importance of this metric: 0.9 (error_rate), 0.7 (coverage), 0.4 (build_time)"
+        stability: "0.5 — metric definitions are stable, values change"
+        energy: "Recency of measurement: 1.0 (just measured) → 0.0 (stale)"
+        value: "The numeric measurement"
+        unit: "The measurement unit (%, ms, count, bytes)"
+        measured_at: "ISO timestamp of last measurement"
+
+  links_created:
+    - from: "Thing(subtype=metric)"
+      to: "Thing(subtype=code_file)"     # the file this metric measures
+      r.type: "MEASURES"
+      hierarchy: 0.3                     # metric observes from above
+      permanence: 0.7                    # metric-file binding is fairly stable
+      trust: 0.8                         # metrics are objective measurements
+      friction: 0.1                      # measurement is frictionless
+
+    - from: "Thing(subtype=metric)"
+      to: "Space(subtype=module)"        # the module this metric measures
+      r.type: "MEASURES"
+      hierarchy: 0.2                     # metric observes module from slightly above
+      permanence: 0.8                    # module-level metrics are persistent
+      trust: 0.8                         # aggregate metrics are reliable
+
+    - from: "Thing(subtype=metric)"
+      to: "Narrative(subtype=invariant)" # the invariant this metric validates
+      r.type: "QUANTIFIES"
+      hierarchy: -0.3                    # metric serves the invariant
+      permanence: 0.7                    # metric-invariant link is stable
+      trust: 0.7                         # metric may not fully capture the invariant
+
+  example:
+    node:
+      id: "thing:metric_grammar_test_coverage"
+      subtype: "metric"
+      content: "test_coverage: 87% — grammar module test coverage"
+      weight: 0.7
+      energy: 0.9
+      value: 87.0
+      unit: "%"
+      measured_at: "2026-03-15T14:30:00Z"
+    link_to_file:
+      target: "thing:file_synthesis_py"
+      r.type: "MEASURES"
+      hierarchy: 0.3
+      permanence: 0.7
+      trust: 0.8
+    link_to_invariant:
+      target: "narrative:inv_verbs_never_stored"
+      r.type: "QUANTIFIES"
+      hierarchy: -0.3
+      trust: 0.7
+
+# =============================================================================
+# SUBTYPE SUMMARY — Every cluster has a unique identity
+# =============================================================================
+
+subtype_registry:
+  issue:            { node_type: Moment,    source: "issue tracker",      role: "bug report or feature request with valence + friction" }
+  error_log:        { node_type: Moment,    source: "monitoring",         role: "runtime error with stack trace (episodic, high friction)" }
+  linter_bot:       { node_type: Actor,     source: "CI/CD",              role: "automated linting actor that creates error_logs" }
+  review_comment:   { node_type: Moment,    source: "PR review",          role: "code review feedback event with reviewer trust" }
+  migration:        { node_type: Narrative, source: "migration files",    role: "schema change procedure with destructive potential" }
+  config:           { node_type: Thing,     source: "config files",       role: "configuration artifact (.env, .yaml) with high permanence" }
+  secret:           { node_type: Thing,     source: "secrets management", role: "protected credential with extreme trust + aversion constraints" }
+  doc_chain_link:   { node_type: "(link)",  source: "doc chain structure", role: "CHAIN_NEXT link — the golden thread between doc positions" }
+  task:             { node_type: Narrative, source: "task management",    role: "work item with energy mapped to status lifecycle" }
+  metric:           { node_type: Thing,     source: "metrics pipeline",   role: "observable measurement with recency-based energy" }
+
+# =============================================================================
+# LINK TYPE SUMMARY — How these clusters connect
+# =============================================================================
+
+link_type_registry:
+  AFFECTS:       "issue identifies affected code files"
+  EVIDENCES:     "error_log provides stack trace evidence for a code_function"
+  SUPPORTS:      "error_log supports (is evidence for) an issue"
+  CREATED:       "linter_bot created an error_log finding"
+  MONITORS:      "linter_bot passively monitors a code_file"
+  CRITIQUES:     "review_comment judges a code_function"
+  AUTHORED_BY:   "review_comment was written by a reviewer Actor"
+  MUTATES:       "migration modifies a data_structure"
+  TRIGGERED_BY:  "migration is triggered by a deploy narrative"
+  CONFIGURES:    "config shapes the behavior of an environment Space"
+  READ_BY:       "config is consumed by code_files"
+  STORED_IN:     "secret lives inside a config file"
+  OWNED_BY:      "secret is owned by an Actor (high trust required)"
+  CHAIN_NEXT:    "doc chain golden thread — position N → position N+1"
+  CLAIMED_BY:    "task is claimed by an Actor"
+  SERVES:        "task serves an objective"
+  MEASURES:      "metric observes a code_file or module"
+  QUANTIFIES:    "metric provides numeric evidence for an invariant"

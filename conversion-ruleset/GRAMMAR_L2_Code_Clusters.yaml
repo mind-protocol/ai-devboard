@@ -1,0 +1,921 @@
+# Grammar L2 — Code Cluster Definitions
+# How doc chain positions map to graph nodes, links, and subtypes
+#
+# Each cluster = one doc chain file → the graph nodes it creates,
+# the links between them, and the link dimension values.
+#
+# RULE: Each position in the doc chain gets a UNIQUE subtype
+# so we always know WHERE a node came from.
+
+version: "0.1"
+created: "2026-03-15"
+status: "DESIGNING"
+
+# =============================================================================
+# CLUSTER 1: OBJECTIVES → "what we want"
+# =============================================================================
+#
+# Source: docs/grammar/OBJECTIVES_Grammar.md
+# Justification: Objectives are the WHY — they create desire-like attractors
+# in the code graph. Each objective is a pull force.
+
+cluster_objectives:
+  source_doc: "docs/{area}/{module}/OBJECTIVES_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "objective"          # UNIQUE: only OBJECTIVES docs create this
+      justification: "An objective is an interpretive structure about what SHOULD exist. It's not a fact (Moment) or an entity (Thing) — it's a direction."
+      fields:
+        content: "The objective text (e.g., 'Zero-stored verbs — pure computation')"
+        weight: "Ranked position: #1 = 0.9, #2 = 0.7, #3 = 0.5"
+        stability: "0.8 — objectives resist change (they're foundational)"
+        energy: "0.5 — moderate (active but not urgent)"
+
+  links_created:
+    - from: "Narrative(subtype=objective)"
+      to: "Space(subtype=module)"     # the module this objective belongs to
+      r.type: "BELONGS_TO"
+      hierarchy: -0.8                  # objective is CONTAINED BY module
+      permanence: 0.9                  # objectives are near-permanent
+      trust: 0.9                       # we trust the stated objective
+      friction: 0.1                    # low friction — objectives are clear
+
+  example:
+    node:
+      id: "narrative:obj_zero_stored_verbs"
+      subtype: "objective"
+      content: "Zero-stored verbs — verbs are never stored in the database, always computed on-the-fly from 13 physical dimensions"
+      weight: 0.9
+    link_to_module:
+      target: "space:module_grammar"
+      r.type: "BELONGS_TO"
+      hierarchy: -0.8
+      permanence: 0.9
+
+# =============================================================================
+# CLUSTER 2: BEHAVIORS → "what it does observably"
+# =============================================================================
+#
+# Source: docs/grammar/BEHAVIORS_Grammar.md
+# Justification: Behaviors are observable effects — they're MOMENTS that
+# SHOULD happen. Each GIVEN/WHEN/THEN is a testable prediction.
+
+cluster_behaviors:
+  source_doc: "docs/{area}/{module}/BEHAVIORS_{Module}.md"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "behavior"           # UNIQUE: only BEHAVIORS docs create this
+      justification: "A behavior is a discrete observable event (GIVEN/WHEN/THEN). It's episodic — it describes something that happens, not something that exists."
+      fields:
+        content: "The GIVEN/WHEN/THEN block"
+        weight: "0.6 — behaviors have moderate consolidated importance"
+        stability: "0.5 — behaviors can evolve as understanding deepens"
+        energy: "0.3 — behaviors are not urgent, they're reference"
+
+  links_created:
+    - from: "Moment(subtype=behavior)"
+      to: "Narrative(subtype=objective)"
+      r.type: "VALIDATES"
+      hierarchy: 0.5                   # behavior ELABORATES objective
+      polarity: [0.8, 0.3]            # behavior flows FROM objective (tests it)
+      trust: 0.7                       # we mostly trust the behavior spec
+      permanence: 0.7                  # behaviors are fairly stable
+
+  example:
+    node:
+      id: "moment:behavior_verb_on_the_fly"
+      subtype: "behavior"
+      content: "GIVEN: a link with hierarchy=-0.6 and polarity=[0.8,0.2] WHEN: synthesize_link_phrase() is called THEN: returns 'contains' with temporal modifier"
+      weight: 0.6
+    link_to_objective:
+      target: "narrative:obj_zero_stored_verbs"
+      r.type: "VALIDATES"
+      hierarchy: 0.5
+
+# =============================================================================
+# CLUSTER 3: ALGORITHM → "how it works step by step"
+# =============================================================================
+#
+# Source: docs/grammar/ALGORITHM_Grammar.md
+# Justification: Algorithms are PROCESSES — step-by-step procedures
+# that can be executed. They're the "muscle memory" of the module.
+
+cluster_algorithm:
+  source_doc: "docs/{area}/{module}/ALGORITHM_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "algorithm"          # UNIQUE: only ALGORITHM docs create this
+      justification: "An algorithm is a process narrative — it describes HOW something works. It's interpretive (not a raw fact) and procedural (not a static entity)."
+      fields:
+        content: "Step-by-step pseudocode or procedure description"
+        weight: "0.7 — algorithms are important (they're the HOW)"
+        stability: "0.6 — algorithms change when understanding improves"
+        energy: "0.4 — reference, not urgent"
+
+    - node_type: Thing
+      subtype: "data_structure"     # UNIQUE: ALGORITHM docs define data structures
+      justification: "Data structures are concrete entities (like functions, classes). They're Things because they exist as defined artifacts."
+      fields:
+        content: "Structure definition (fields, types, constraints)"
+        weight: "0.5"
+
+  links_created:
+    - from: "Narrative(subtype=algorithm)"
+      to: "Moment(subtype=behavior)"
+      r.type: "IMPLEMENTS"
+      hierarchy: -0.3                  # algorithm is slightly below behavior (it serves it)
+      polarity: [0.7, 0.4]            # algorithm supports behavior
+      trust: 0.6                       # algorithm may not perfectly match behavior
+      friction: 0.2                    # some translation friction
+
+  example:
+    node:
+      id: "narrative:algo_link_synthesis_pipeline"
+      subtype: "algorithm"
+      content: "6-step pipeline: extract dimensions → temporal modifier → pre-verb → base verb (hierarchy×polarity) → post-verb → contextual override"
+      weight: 0.7
+    data_structure:
+      id: "thing:struct_link_phrase"
+      subtype: "data_structure"
+      content: "LinkPhrase { temporal: str, pre_verb: str, verb: str, post_verb: str, override: str? }"
+
+# =============================================================================
+# CLUSTER 4: IMPLEMENTATION → "where it lives in code"
+# =============================================================================
+#
+# Source: docs/grammar/IMPLEMENTATION_Grammar.md
+# Justification: Implementation maps docs to code files. Each file is a Thing
+# with an EvidenceRef. The IMPLEMENTATION doc creates the bridge.
+
+cluster_implementation:
+  source_doc: "docs/{area}/{module}/IMPLEMENTATION_{Module}.md"
+
+  nodes_created:
+    - node_type: Thing
+      subtype: "code_file"          # UNIQUE: IMPLEMENTATION docs point to code files
+      justification: "A code file is a concrete artifact — a Thing that exists on disk with a specific path, line count, and responsibility."
+      fields:
+        content: "File responsibility description"
+        evidence_ref:
+          repo: "mind-mcp"
+          path: "runtime/physics/synthesis.py"
+          commit_sha: null             # filled at ingestion
+          range: null                  # whole file
+          kind: "file_ref"
+        weight: "Proportional to file importance (lines, imports, centrality)"
+        energy: "Proportional to recent git activity"
+
+    - node_type: Thing
+      subtype: "code_function"      # UNIQUE: functions/classes within files
+      justification: "A function is a sub-artifact — a Thing inside a Thing, with its own EvidenceRef range."
+      fields:
+        evidence_ref:
+          kind: "function_ref"
+          range: "L42-L98"            # specific lines
+
+  links_created:
+    - from: "Thing(subtype=code_file)"
+      to: "Narrative(subtype=algorithm)"
+      r.type: "IMPLEMENTS"
+      hierarchy: -0.5                  # code file implements the algorithm
+      trust: 0.8                       # code is the ground truth
+      friction: 0.1                    # direct mapping
+      permanence: 0.8                  # code files are stable artifacts
+
+    - from: "Thing(subtype=code_file)"
+      to: "Space(subtype=module)"
+      r.type: "IN"
+      hierarchy: -0.9                  # file is deeply contained in module
+
+  example:
+    node:
+      id: "thing:file_synthesis_py"
+      subtype: "code_file"
+      content: "Link synthesis engine — generates verbs from 13 dimensions"
+      evidence_ref: { repo: "mind-mcp", path: "runtime/physics/synthesis.py", kind: "file_ref" }
+      weight: 0.8
+    link_to_algo:
+      target: "narrative:algo_link_synthesis_pipeline"
+      r.type: "IMPLEMENTS"
+      hierarchy: -0.5
+      trust: 0.8
+
+# =============================================================================
+# CLUSTER 5: VALIDATION → "what must be true"
+# =============================================================================
+#
+# Source: docs/grammar/VALIDATION_Grammar.md
+# Justification: Invariants are like VALUES in L1 — non-negotiable truths
+# with very high weight and stability. They resist change.
+
+cluster_validation:
+  source_doc: "docs/{area}/{module}/VALIDATION_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "invariant"          # UNIQUE: only VALIDATION docs create invariants
+      justification: "An invariant is a value-like narrative — something that MUST be true. Like a citizen's value node, it has max stability and resists erosion."
+      fields:
+        content: "MUST: ... / NEVER: ..."
+        weight: "0.9 — invariants are critical"
+        stability: "0.95 — almost immutable (like identity values)"
+        energy: "0.2 — low activation (always true, not urgent)"
+
+  links_created:
+    - from: "Narrative(subtype=invariant)"
+      to: "Moment(subtype=behavior)"
+      r.type: "CONSTRAINS"
+      hierarchy: 0.7                   # invariant is ABOVE behavior (it governs)
+      permanence: 0.95                 # near-permanent constraint
+      trust: 0.95                      # invariants are the most trusted
+      valence: 0.8                     # constructive (protective)
+
+  example:
+    node:
+      id: "narrative:inv_verbs_never_stored"
+      subtype: "invariant"
+      content: "MUST: Verbs are computed on-the-fly from dimensions. NEVER: Store a verb string on a link node in FalkorDB."
+      weight: 0.9
+      stability: 0.95
+
+# =============================================================================
+# CLUSTER 6: HEALTH → "how to verify at runtime"
+# =============================================================================
+#
+# Source: docs/grammar/HEALTH_Grammar.md
+# Justification: Health checks are PROCESSES — automated verification
+# routines. They're like process nodes with action_command.
+
+cluster_health:
+  source_doc: "docs/{area}/{module}/HEALTH_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "health_check"       # UNIQUE: only HEALTH docs create these
+      justification: "A health check is a process narrative with an executable verification. Like a process node, it carries action_command and drive_affinity."
+      fields:
+        content: "What to check and how"
+        action_command: "python -c 'from runtime.physics.synthesis import synthesize; ...'"
+        drive_affinity: { self_preservation: 0.8, achievement: 0.3 }
+        weight: "0.5 — moderate importance"
+        stability: "0.6 — health checks evolve with the system"
+
+  links_created:
+    - from: "Narrative(subtype=health_check)"
+      to: "Narrative(subtype=invariant)"
+      r.type: "VERIFIES"
+      hierarchy: -0.3                  # health check serves the invariant
+      trust: 0.7                       # health check may not cover everything
+      polarity: [0.8, 0.2]            # health check acts ON invariant
+
+  example:
+    node:
+      id: "narrative:health_determinism_check"
+      subtype: "health_check"
+      content: "Verify that synthesize_link_phrase() is deterministic — same dimensions always produce same verb"
+      action_command: "python -m pytest tests/test_grammar_determinism.py"
+      drive_affinity: { self_preservation: 0.8 }
+
+# =============================================================================
+# CLUSTER 7: PATTERNS → "why this shape"
+# =============================================================================
+#
+# Source: docs/{area}/{module}/PATTERNS_{Module}.md
+# Justification: Patterns are design decisions — interpretive structures
+# explaining WHY a particular architectural shape was chosen.
+# High stability because decisions, once made, tend to stick.
+
+cluster_patterns:
+  source_doc: "docs/{area}/{module}/PATTERNS_{Module}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "pattern"               # UNIQUE: only PATTERNS docs create this
+      justification: "A pattern is an interpretive structure explaining architectural choice. It's not a fact or an artifact — it's a rationale for WHY the system is shaped this way."
+      fields:
+        content: "The design decision and its reasoning (e.g., 'Event sourcing over CRUD — because state is a narrative, not a snapshot')"
+        weight: "0.8 — patterns are high-importance (they shape everything downstream)"
+        stability: "0.85 — decisions are sticky, rarely reversed once adopted"
+        energy: "0.3 — low activation (reference, not urgent)"
+
+  links_created:
+    - from: "Narrative(subtype=pattern)"
+      to: "Narrative(subtype=objective)"
+      r.type: "MOTIVATES"
+      hierarchy: 0.4                    # pattern is slightly above objective (it justifies it)
+      trust: 0.85                       # high trust — the pattern IS the reasoning
+      friction: 0.15                    # low friction — pattern clearly explains objective
+      permanence: 0.9                   # design decisions are near-permanent
+      polarity: [0.8, 0.3]            # pattern flows toward objective (justifies it)
+      valence: 0.7                     # constructive — patterns enable objectives
+
+    - from: "Narrative(subtype=pattern)"
+      to: "Space(subtype=module)"
+      r.type: "BELONGS_TO"
+      hierarchy: -0.8                   # pattern is contained by module
+      permanence: 0.9                   # stable membership
+      trust: 0.9                        # trusted containment
+      friction: 0.1                     # clear ownership
+      polarity: [0.5, 0.5]            # bidirectional awareness
+      valence: 0.5                     # neutral — just containment
+
+  example:
+    node:
+      id: "narrative:pattern_event_sourcing"
+      subtype: "pattern"
+      content: "Event sourcing over CRUD — state is a narrative unfolding through Moments, not a mutable snapshot. Every state change is an event node, enabling replay and audit."
+      weight: 0.8
+      stability: 0.85
+    link_to_objective:
+      target: "narrative:obj_zero_stored_verbs"
+      r.type: "MOTIVATES"
+      hierarchy: 0.4
+      trust: 0.85
+
+# =============================================================================
+# CLUSTER 8: SYNC → "what's happening now"
+# =============================================================================
+#
+# Source: .mind/state/SYNC_Project_State.md
+# Justification: Syncs are episodic snapshots — they capture the current
+# state of a module at a point in time. Low stability because they
+# change every session. Energy decays rapidly.
+
+cluster_sync:
+  source_doc: ".mind/state/SYNC_Project_State.md"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "sync_snapshot"         # UNIQUE: only SYNC docs create this
+      justification: "A sync is an episodic event capturing 'what's happening now.' It's a Moment because it records a point-in-time observation, not a persistent entity."
+      fields:
+        content: "Current state description — blockers, progress, next steps"
+        weight: "0.4 — moderate (important now, less so later)"
+        stability: "0.15 — very low (changes every session)"
+        energy: "0.8 — high activation (it's the current state)"
+        timestamp: "ISO 8601 — when this sync was taken"
+
+  links_created:
+    - from: "Moment(subtype=sync_snapshot)"
+      to: "Space(subtype=module)"
+      r.type: "BELONGS_TO"
+      hierarchy: -0.8                   # sync is contained by module
+      permanence: 0.2                   # transient — syncs are replaced frequently
+      trust: 0.7                        # syncs reflect honest current state
+      friction: 0.3                     # some ambiguity (human judgment)
+      polarity: [0.6, 0.4]            # slightly directional (sync describes module)
+      valence: 0.5                     # neutral observation
+
+  example:
+    node:
+      id: "moment:sync_grammar_20260315"
+      subtype: "sync_snapshot"
+      content: "Grammar module: L2 clusters designed (6/6), code not started, blocked on schema finalization"
+      weight: 0.4
+      stability: 0.15
+      energy: 0.8
+      timestamp: "2026-03-15T14:00:00Z"
+    link_to_module:
+      target: "space:module_grammar"
+      r.type: "BELONGS_TO"
+      hierarchy: -0.8
+      permanence: 0.2
+
+# =============================================================================
+# CLUSTER 9: CONCEPT → "cross-cutting idea"
+# =============================================================================
+#
+# Source: docs/{area}/CONCEPT_{Name}.md
+# Justification: Concepts are interpretive structures that unify multiple
+# modules. They span boundaries and give coherence to the system.
+# High weight because concepts are foundational glue.
+
+cluster_concept:
+  source_doc: "docs/{area}/CONCEPT_{Name}.md"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "concept"               # UNIQUE: only CONCEPT docs create this
+      justification: "A concept is an interpretive structure that unifies multiple modules. It's a Narrative because it provides meaning and coherence — not a fact or artifact."
+      fields:
+        content: "The concept description — what it means, why it matters, what it unifies"
+        weight: "0.85 — concepts are foundational (they bind the system together)"
+        stability: "0.8 — concepts are durable but can evolve"
+        energy: "0.4 — moderate activation (referenced frequently, not urgent)"
+
+  links_created:
+    - from: "Narrative(subtype=concept)"
+      to: "Space(subtype=module)"
+      r.type: "SPANS"
+      hierarchy: 0.3                    # concept is slightly above module (it crosses them)
+      permanence: 0.8                   # concept-to-module mapping is stable
+      trust: 0.8                        # the spanning relationship is real
+      friction: 0.2                     # some interpretation needed
+      polarity: [0.7, 0.5]            # concept acts on modules (gives them meaning)
+      valence: 0.7                     # constructive — concepts create coherence
+
+  example:
+    node:
+      id: "narrative:concept_limbic_resonance"
+      subtype: "concept"
+      content: "Limbic Resonance — the idea that AI cognition mirrors emotional physics. Drives, affinities, and aversions propagate through the graph like feelings through a nervous system."
+      weight: 0.85
+      stability: 0.8
+    link_to_module_physics:
+      target: "space:module_physics"
+      r.type: "SPANS"
+      hierarchy: 0.3
+      trust: 0.8
+    link_to_module_grammar:
+      target: "space:module_grammar"
+      r.type: "SPANS"
+      hierarchy: 0.3
+      trust: 0.8
+
+# =============================================================================
+# CLUSTER 10: TEST_FILE → "test artifact on disk"
+# =============================================================================
+#
+# Source: tests/ directory (discovered via code scanning)
+# Justification: Tests are concrete artifacts — Things that exist as files
+# on disk with EvidenceRefs. They validate behaviors and exercise code.
+
+cluster_test_file:
+  source_doc: "tests/{area}/{module}/test_{name}.py"
+
+  nodes_created:
+    - node_type: Thing
+      subtype: "test_file"            # UNIQUE: only test files create this
+      justification: "A test is a concrete artifact — a Thing that exists on disk, executes, and produces pass/fail results. It has an EvidenceRef pointing to the file."
+      fields:
+        content: "Test description — what it covers and how"
+        evidence_ref:
+          repo: "mind-mcp"
+          path: "tests/test_grammar_determinism.py"
+          commit_sha: null             # filled at ingestion
+          range: null                  # whole file
+          kind: "file_ref"
+        weight: "0.5 — moderate importance (tests support, not define)"
+        energy: "Proportional to recent test run results (pass raises, fail raises more)"
+
+  links_created:
+    - from: "Thing(subtype=test_file)"
+      to: "Thing(subtype=code_file)"
+      r.type: "TESTS"
+      hierarchy: 0.2                    # test is slightly above code (it judges it)
+      trust: 0.7                        # test coverage may be incomplete
+      friction: 0.2                     # direct mapping between test and code
+      permanence: 0.7                   # tests are fairly stable
+      polarity: [0.8, 0.2]            # test acts ON code (verifies it)
+      valence: 0.8                     # constructive — tests protect code
+
+    - from: "Thing(subtype=test_file)"
+      to: "Moment(subtype=behavior)"
+      r.type: "VALIDATES"
+      hierarchy: -0.2                   # test serves the behavior spec
+      trust: 0.75                       # test may not cover all cases in behavior
+      friction: 0.15                    # clear relationship
+      permanence: 0.7                   # stable once written
+      polarity: [0.7, 0.3]            # test flows from behavior (validates it)
+      valence: 0.8                     # constructive — tests prove behaviors
+
+  example:
+    node:
+      id: "thing:test_grammar_determinism"
+      subtype: "test_file"
+      content: "Tests that synthesize_link_phrase() is deterministic — same dimensions always produce same verb"
+      evidence_ref: { repo: "mind-mcp", path: "tests/test_grammar_determinism.py", kind: "file_ref" }
+      weight: 0.5
+    link_to_code:
+      target: "thing:file_synthesis_py"
+      r.type: "TESTS"
+      hierarchy: 0.2
+      trust: 0.7
+    link_to_behavior:
+      target: "moment:behavior_verb_on_the_fly"
+      r.type: "VALIDATES"
+      hierarchy: -0.2
+      trust: 0.75
+
+# =============================================================================
+# CLUSTER 11: COMMIT → "a discrete git event"
+# =============================================================================
+#
+# Source: git log (discovered via git history scanning)
+# Justification: A commit is a discrete event — a Moment that records
+# what changed, when, and by whom. Energy = recency (recent commits
+# are more relevant). Decays as the commit ages.
+
+cluster_commit:
+  source_doc: "(git history)"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "commit"               # UNIQUE: only git commits create this
+      justification: "A commit is a discrete event — it records a bounded change at a point in time. It's episodic (happened once), has a timestamp, and decays in relevance."
+      fields:
+        content: "Commit message"
+        sha: "Full git commit SHA"
+        author: "Commit author (maps to Actor)"
+        timestamp: "ISO 8601 commit timestamp"
+        weight: "0.4 — moderate baseline"
+        stability: "0.95 — commits are immutable once created"
+        energy: "Recency-based: 0.9 for today, decays with time (half-life ~7 days)"
+
+  links_created:
+    - from: "Moment(subtype=commit)"
+      to: "Thing(subtype=code_file)"
+      r.type: "MODIFIED"
+      hierarchy: 0.1                    # commit is slightly above file (it acts on it)
+      trust: 1.0                        # git diff is ground truth
+      friction: 0.0                     # zero ambiguity — diff is exact
+      permanence: 0.95                  # commit record is immutable
+      polarity: [0.9, 0.1]            # commit acts ON file (changes it)
+      valence: 0.5                     # neutral — change could be good or bad
+
+    - from: "Moment(subtype=commit)"
+      to: "Actor"
+      r.type: "AUTHORED_BY"
+      hierarchy: -0.5                   # commit is below author (author created it)
+      trust: 0.9                        # author attribution is reliable
+      friction: 0.05                    # clear relationship
+      permanence: 0.95                  # immutable
+      polarity: [0.2, 0.8]            # author flows toward commit (created it)
+      valence: 0.6                     # constructive — authorship is positive
+
+  example:
+    node:
+      id: "moment:commit_a1b2c3d"
+      subtype: "commit"
+      content: "feat: implement 6-step link synthesis pipeline"
+      sha: "a1b2c3d4e5f6"
+      author: "nervo"
+      timestamp: "2026-03-15T10:30:00Z"
+      energy: 0.9
+    link_to_file:
+      target: "thing:file_synthesis_py"
+      r.type: "MODIFIED"
+      hierarchy: 0.1
+      trust: 1.0
+    link_to_author:
+      target: "actor:nervo"
+      r.type: "AUTHORED_BY"
+      hierarchy: -0.5
+      trust: 0.9
+
+# =============================================================================
+# CLUSTER 12: PULL_REQUEST → "a bounded review event"
+# =============================================================================
+#
+# Source: GitHub API (discovered via PR scanning)
+# Justification: A PR is a bounded event with lifecycle (open -> merged -> closed).
+# It groups commits, involves reviewers, and has a temporal span.
+
+cluster_pull_request:
+  source_doc: "(GitHub API)"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "pull_request"          # UNIQUE: only PRs create this
+      justification: "A PR is a bounded event with lifecycle — opened, reviewed, merged or closed. It's episodic (it happens over a span), groups commits, and decays in relevance."
+      fields:
+        content: "PR title and description"
+        pr_number: "GitHub PR number"
+        state: "open | merged | closed"
+        timestamp_opened: "ISO 8601 — when the PR was opened"
+        timestamp_closed: "ISO 8601 — when the PR was merged/closed (null if open)"
+        weight: "0.6 — PRs are significant events (they gate changes)"
+        stability: "0.9 — PR record is immutable once merged"
+        energy: "State-dependent: open=0.9, merged=recency-decay, closed=0.1"
+
+  links_created:
+    - from: "Moment(subtype=pull_request)"
+      to: "Moment(subtype=commit)"
+      r.type: "CONTAINS"
+      hierarchy: 0.6                    # PR is above commits (it groups them)
+      trust: 1.0                        # PR-commit membership is exact
+      friction: 0.0                     # zero ambiguity
+      permanence: 0.95                  # immutable once merged
+      polarity: [0.7, 0.3]            # PR acts on commits (organizes them)
+      valence: 0.5                     # neutral containment
+
+    - from: "Moment(subtype=pull_request)"
+      to: "Actor"
+      r.type: "REVIEWED_BY"
+      hierarchy: -0.3                   # PR is below reviewer (reviewer judges it)
+      trust: 0.85                       # reviewer attribution is reliable
+      friction: 0.1                     # mostly clear
+      permanence: 0.9                   # review record is stable
+      polarity: [0.3, 0.7]            # reviewer flows toward PR (reviews it)
+      valence: 0.7                     # constructive — review improves quality
+
+  example:
+    node:
+      id: "moment:pr_42"
+      subtype: "pull_request"
+      content: "feat: link synthesis pipeline with 13-dimension verb generation"
+      pr_number: 42
+      state: "merged"
+      timestamp_opened: "2026-03-14T09:00:00Z"
+      timestamp_closed: "2026-03-15T11:00:00Z"
+      energy: 0.7
+    link_to_commit:
+      target: "moment:commit_a1b2c3d"
+      r.type: "CONTAINS"
+      hierarchy: 0.6
+      trust: 1.0
+    link_to_reviewer:
+      target: "actor:nlr"
+      r.type: "REVIEWED_BY"
+      hierarchy: -0.3
+      trust: 0.85
+
+# =============================================================================
+# CLUSTER 13: DEPENDENCY → "external package artifact"
+# =============================================================================
+#
+# Source: package.json / requirements.txt / pyproject.toml
+# Justification: A dependency is a concrete external artifact — a Thing
+# that exists outside the repo but is imported and relied upon.
+# Weight = usage frequency (more imports = higher weight).
+
+cluster_dependency:
+  source_doc: "(package manifest: package.json, requirements.txt, pyproject.toml)"
+
+  nodes_created:
+    - node_type: Thing
+      subtype: "dependency"            # UNIQUE: only dependency scanning creates this
+      justification: "A dependency is a concrete external artifact — a package that exists on a registry (npm, PyPI). It's a Thing because it has a name, version, and is referenced by code."
+      fields:
+        content: "Package name and purpose"
+        package_name: "e.g., 'falkordb', 'three.js', 'express'"
+        version: "Semver constraint (e.g., '^4.18.0')"
+        registry: "npm | pypi | crates"
+        weight: "Proportional to usage frequency (import count / total imports)"
+        stability: "0.7 — dependencies change with upgrades but are fairly stable"
+        energy: "0.2 — low activation (passive, always present)"
+
+  links_created:
+    - from: "Thing(subtype=code_file)"
+      to: "Thing(subtype=dependency)"
+      r.type: "DEPENDS_ON"
+      hierarchy: -0.3                   # code is below dependency (it relies on it)
+      trust: 0.9                        # import statement is ground truth
+      friction: 0.3                     # some friction — version conflicts, breaking changes
+      permanence: 0.6                   # dependencies can be swapped out
+      polarity: [0.2, 0.8]            # dependency flows toward code (code consumes it)
+      valence: 0.6                     # constructive — dependencies enable features
+
+  example:
+    node:
+      id: "thing:dep_falkordb"
+      subtype: "dependency"
+      content: "FalkorDB — graph database client for Python, used for all graph operations"
+      package_name: "falkordb"
+      version: ">=1.0.0"
+      registry: "pypi"
+      weight: 0.8
+    link_from_code:
+      source: "thing:file_synthesis_py"
+      target: "thing:dep_falkordb"
+      r.type: "DEPENDS_ON"
+      hierarchy: -0.3
+      trust: 0.9
+
+# =============================================================================
+# CLUSTER 14: CI_PIPELINE → "how to build and ship"
+# =============================================================================
+#
+# Source: .github/workflows/*.yml, Dockerfile, CI config
+# Justification: A CI/CD pipeline is a procedural narrative — it describes
+# HOW to build, test, and ship the system. It's a Narrative because
+# it's an interpretive process (not a raw fact or artifact).
+
+cluster_ci_pipeline:
+  source_doc: ".github/workflows/{pipeline}.yml"
+
+  nodes_created:
+    - node_type: Narrative
+      subtype: "ci_pipeline"           # UNIQUE: only CI config creates this
+      justification: "A pipeline is a procedural narrative — a step-by-step process for building and shipping. Like an algorithm, it describes HOW, but at the infrastructure level."
+      fields:
+        content: "Pipeline description — what it builds, tests, and deploys"
+        trigger: "Event that triggers the pipeline (push, PR, schedule)"
+        stages: "Ordered list of stages (build, test, deploy)"
+        weight: "0.6 — important infrastructure (gates all changes)"
+        stability: "0.7 — pipelines evolve but are fairly stable"
+        energy: "0.3 — low activation (runs automatically, not manually invoked)"
+
+  links_created:
+    - from: "Narrative(subtype=ci_pipeline)"
+      to: "Thing(subtype=code_file)"
+      r.type: "BUILDS"
+      hierarchy: 0.3                    # pipeline is above code (it processes it)
+      trust: 0.8                        # pipeline config is reliable
+      friction: 0.2                     # some translation between config and code
+      permanence: 0.7                   # pipeline-to-code mapping is stable
+      polarity: [0.8, 0.2]            # pipeline acts ON code (builds/tests it)
+      valence: 0.7                     # constructive — pipelines ensure quality
+
+    - from: "Narrative(subtype=ci_pipeline)"
+      to: "Space(subtype=environment)"
+      r.type: "DEPLOYS_TO"
+      hierarchy: 0.2                    # pipeline is slightly above environment (it pushes to it)
+      trust: 0.85                       # deploy target is explicit in config
+      friction: 0.15                    # clear mapping
+      permanence: 0.6                   # deploy targets can change
+      polarity: [0.9, 0.1]            # pipeline flows toward environment (pushes to it)
+      valence: 0.6                     # constructive — deploys deliver value
+
+  example:
+    node:
+      id: "narrative:ci_main_pipeline"
+      subtype: "ci_pipeline"
+      content: "Main CI pipeline — runs on push to main: lint, type-check, unit tests, build, deploy to staging"
+      trigger: "push to main"
+      stages: ["lint", "type-check", "test", "build", "deploy"]
+      weight: 0.6
+    link_to_code:
+      target: "thing:file_synthesis_py"
+      r.type: "BUILDS"
+      hierarchy: 0.3
+      trust: 0.8
+    link_to_env:
+      target: "space:env_staging"
+      r.type: "DEPLOYS_TO"
+      hierarchy: 0.2
+      trust: 0.85
+
+# =============================================================================
+# CLUSTER 15: DEPLOY → "a deployment event"
+# =============================================================================
+#
+# Source: CI/CD logs, deployment records
+# Justification: A deploy is a discrete event — a Moment that records
+# when code was shipped to an environment. Energy decays with time
+# (recent deploys are more relevant).
+
+cluster_deploy:
+  source_doc: "(CI/CD deployment logs)"
+
+  nodes_created:
+    - node_type: Moment
+      subtype: "deploy"               # UNIQUE: only deployment events create this
+      justification: "A deploy is a discrete event — it records when code was shipped to a target environment. It's episodic, timestamped, and decays in relevance as newer deploys supersede it."
+      fields:
+        content: "Deploy description — what was shipped and where"
+        version: "Deployed version or commit SHA"
+        timestamp: "ISO 8601 — when the deploy happened"
+        status: "success | failed | rolled_back"
+        weight: "0.5 — moderate importance"
+        stability: "0.95 — deploy records are immutable"
+        energy: "Recency-based: 0.9 for latest, decays rapidly (half-life ~3 days)"
+
+  links_created:
+    - from: "Moment(subtype=deploy)"
+      to: "Narrative(subtype=ci_pipeline)"
+      r.type: "TRIGGERED_BY"
+      hierarchy: -0.4                   # deploy is below pipeline (pipeline caused it)
+      trust: 0.9                        # trigger source is explicit
+      friction: 0.1                     # clear causal link
+      permanence: 0.9                   # immutable record
+      polarity: [0.2, 0.8]            # pipeline flows toward deploy (triggered it)
+      valence: 0.5                     # neutral — deploy just happened
+
+    - from: "Moment(subtype=deploy)"
+      to: "Space(subtype=environment)"
+      r.type: "DEPLOYED_TO"
+      hierarchy: -0.5                   # deploy is below environment (it enters it)
+      trust: 0.95                       # deploy target is exact
+      friction: 0.05                    # almost zero ambiguity
+      permanence: 0.8                   # deploy-to-env record is stable
+      polarity: [0.8, 0.3]            # deploy flows toward environment (enters it)
+      valence: 0.6                     # constructive — delivers value to env
+
+  example:
+    node:
+      id: "moment:deploy_staging_20260315"
+      subtype: "deploy"
+      content: "Deploy to staging — link synthesis pipeline v0.3.0"
+      version: "a1b2c3d4e5f6"
+      timestamp: "2026-03-15T12:00:00Z"
+      status: "success"
+      energy: 0.9
+    link_to_pipeline:
+      target: "narrative:ci_main_pipeline"
+      r.type: "TRIGGERED_BY"
+      hierarchy: -0.4
+      trust: 0.9
+    link_to_env:
+      target: "space:env_staging"
+      r.type: "DEPLOYED_TO"
+      hierarchy: -0.5
+      trust: 0.95
+
+# =============================================================================
+# CLUSTER 16: ENVIRONMENT → "deployment target container"
+# =============================================================================
+#
+# Source: infrastructure config (docker-compose, k8s manifests, env config)
+# Justification: An environment is a context container — a Space where
+# code runs. Like a module Space, it contains things, but at the
+# infrastructure level (production, staging, dev).
+
+cluster_environment:
+  source_doc: "(infrastructure config: docker-compose.yml, k8s manifests)"
+
+  nodes_created:
+    - node_type: Space
+      subtype: "environment"           # UNIQUE: only env config creates this
+      justification: "An environment is a context container — a Space where deployed code runs. It's a Space because it contains and contextualizes Things (running services, configs)."
+      fields:
+        content: "Environment description — purpose, access level, stability guarantee"
+        env_name: "production | staging | dev | test"
+        url: "Base URL for the environment (if applicable)"
+        weight: "Tier-based: production=0.9, staging=0.6, dev=0.3"
+        stability: "0.8 — environments are stable infrastructure"
+        energy: "Activity-based: production=0.7 (always active), dev=varies"
+
+  links_created:
+    - from: "Space(subtype=environment)"
+      to: "Thing(subtype=code_file)"
+      r.type: "RUNS"
+      hierarchy: 0.7                    # environment is above code (it hosts it)
+      trust: 0.8                        # environment-to-code mapping is mostly reliable
+      friction: 0.2                     # some drift between deployed and local code
+      permanence: 0.5                   # running code changes with each deploy
+      polarity: [0.6, 0.4]            # environment acts on code (hosts and runs it)
+      valence: 0.6                     # constructive — environments give code life
+
+  example:
+    node:
+      id: "space:env_staging"
+      subtype: "environment"
+      content: "Staging environment — mirrors production, used for pre-release validation"
+      env_name: "staging"
+      url: "https://staging.mindprotocol.ai"
+      weight: 0.6
+      stability: 0.8
+    link_to_code:
+      target: "thing:file_synthesis_py"
+      r.type: "RUNS"
+      hierarchy: 0.7
+      trust: 0.8
+
+# =============================================================================
+# SUBTYPE SUMMARY — Every position has a unique identity
+# =============================================================================
+
+subtype_registry:
+  # Original clusters (1-6)
+  objective:      { node_type: Narrative, source: OBJECTIVES,      role: "pull force (what we want)" }
+  behavior:       { node_type: Moment,    source: BEHAVIORS,       role: "observable prediction (GIVEN/WHEN/THEN)" }
+  algorithm:      { node_type: Narrative, source: ALGORITHM,       role: "procedure (step by step HOW)" }
+  data_structure: { node_type: Thing,     source: ALGORITHM,       role: "defined artifact (struct/schema)" }
+  code_file:      { node_type: Thing,     source: IMPLEMENTATION,  role: "source file with EvidenceRef" }
+  code_function:  { node_type: Thing,     source: IMPLEMENTATION,  role: "function/class within a file" }
+  invariant:      { node_type: Narrative, source: VALIDATION,      role: "non-negotiable truth (MUST/NEVER)" }
+  health_check:   { node_type: Narrative, source: HEALTH,          role: "automated verification with action_command" }
+  module:         { node_type: Space,     source: "(directory)",   role: "container for all of the above" }
+  # New clusters (7-16)
+  pattern:        { node_type: Narrative, source: PATTERNS,        role: "design decision (why this shape)" }
+  sync_snapshot:  { node_type: Moment,    source: SYNC,            role: "point-in-time state snapshot" }
+  concept:        { node_type: Narrative, source: CONCEPT,         role: "cross-cutting idea spanning modules" }
+  test_file:      { node_type: Thing,     source: "(test dir)",    role: "test artifact with EvidenceRef" }
+  commit:         { node_type: Moment,    source: "(git history)", role: "discrete git change event" }
+  pull_request:   { node_type: Moment,    source: "(GitHub API)",  role: "bounded review event with lifecycle" }
+  dependency:     { node_type: Thing,     source: "(package manifest)", role: "external package artifact" }
+  ci_pipeline:    { node_type: Narrative, source: "(CI config)",   role: "procedural build/ship narrative" }
+  deploy:         { node_type: Moment,    source: "(CI/CD logs)",  role: "discrete deployment event" }
+  environment:    { node_type: Space,     source: "(infra config)", role: "deployment target container" }
+
+# =============================================================================
+# LINK TYPE SUMMARY — How positions relate
+# =============================================================================
+
+link_type_registry:
+  # Original link types
+  BELONGS_TO:   "node is contained in module space"
+  VALIDATES:    "behavior/test validates an objective or behavior"
+  IMPLEMENTS:   "algorithm/code implements a behavior or algorithm"
+  CONSTRAINS:   "invariant governs a behavior"
+  VERIFIES:     "health check tests an invariant"
+  IN:           "file is inside a module space"
+  REFERENCES:   "doc references code (bidirectional pointer)"
+  # New link types (clusters 7-16)
+  MOTIVATES:    "pattern justifies an objective (why this shape)"
+  SPANS:        "concept crosses multiple module spaces"
+  TESTS:        "test file exercises a code file"
+  MODIFIED:     "commit changed a code file"
+  AUTHORED_BY:  "commit was created by an actor"
+  CONTAINS:     "PR groups commits"
+  REVIEWED_BY:  "PR was reviewed by an actor"
+  DEPENDS_ON:   "code file imports an external dependency"
+  BUILDS:       "CI pipeline builds/tests code files"
+  DEPLOYS_TO:   "CI pipeline deploys to an environment"
+  TRIGGERED_BY: "deploy was triggered by a CI pipeline"
+  DEPLOYED_TO:  "deploy landed in an environment"
+  RUNS:         "environment hosts running code"

@@ -1,0 +1,782 @@
+# MIND L2 Code Grammar Schema — Doc Chain → Graph Compilation
+# Deterministic 1:1 conversion from doc chain templates to graph nodes/links.
+# Zero LLM. Pure parsing. Every section compiles to exactly one graph entity.
+#
+# For L1 Cognitive Substrate: see mind-mcp/schema-l1.yaml
+# For L3 Universe Graph:      see mind-mcp/schema-l3.yaml
+
+version: "2.3"
+updated: "2026-03-15"
+status: "CANONICAL"
+
+# =============================================================================
+# WHAT IS L2 CODE GRAMMAR?
+# =============================================================================
+#
+# The doc chain (OBJECTIVES → PATTERNS → BEHAVIORS → ALGORITHM → VALIDATION →
+# IMPLEMENTATION → HEALTH → SYNC) is the canonical knowledge format for every
+# module in Mind Protocol.
+#
+# The L2 Code Grammar defines how each section of each template compiles into
+# graph nodes and links — deterministically, with no LLM involvement.
+#
+# A "compiler" (Python parser) reads a filled-in template, matches YAML
+# conversion rules inline after each section, and emits Cypher CREATE/MERGE
+# statements targeting FalkorDB.
+#
+# KEY INVARIANTS:
+#   1. Same 5 universal node types (Actor, Moment, Narrative, Space, Thing)
+#   2. Subtypes are free-text on NodeBase.subtype — this schema catalogs them
+#   3. Link r.type is a structural tag, NOT a relation_kind (which is L1-only)
+#   4. All link dimensions from LinkBase are available (weight, trust, friction, etc.)
+#   5. Zero constants — all values derived from section semantics
+
+# =============================================================================
+# NODE SUBTYPES BY TYPE
+# =============================================================================
+#
+# These are all subtypes discovered across the 7 doc chain templates +
+# the OBJECTIVES template. Each subtype maps to exactly one section pattern.
+
+node_subtypes:
+
+  # --- Actor subtypes ---
+  # Actors come from citizens/seeding, not from doc chain compilation.
+  # No L2 subtypes — actors are created at L3 via Serenissima seeding.
+  actor:
+    l2_subtypes: []
+    note: "Doc chains describe code, not actors. Actor nodes exist at L3."
+
+  # --- Moment subtypes ---
+  # Moments capture discrete events: behaviors, side effects, edge cases,
+  # anti-behaviors, markers, snapshots, changes, issues.
+  moment:
+    l2_subtypes:
+      - subtype: behavior
+        source: BEHAVIORS_TEMPLATE.md
+        section: "## BEHAVIORS → ### B{N}"
+        id_pattern: "moment:behavior_{module}_{id_key}"
+        description: "Observable behavior with GIVEN/WHEN/THEN contract"
+        fields: [precondition, trigger, outcome, additional]
+
+      - subtype: side_effect
+        source: BEHAVIORS_TEMPLATE.md
+        section: "## INPUTS / OUTPUTS → Side Effects"
+        id_pattern: "moment:side_effect_{module}_{fn}_{slug}"
+        description: "State change or external effect produced by a function"
+
+      - subtype: edge_case
+        source: BEHAVIORS_TEMPLATE.md
+        section: "## EDGE CASES → ### E{N}"
+        id_pattern: "moment:edge_case_{module}_{id_key}"
+        description: "Boundary condition with GIVEN/THEN (no WHEN — always applies)"
+        fields: [precondition, outcome]
+
+      - subtype: anti_behavior
+        source: BEHAVIORS_TEMPLATE.md
+        section: "## ANTI-BEHAVIORS → ### A{N}"
+        id_pattern: "moment:anti_behavior_{module}_{id_key}"
+        description: "Forbidden behavior with MUST NOT/INSTEAD contract"
+        fields: [precondition, trigger, forbidden_outcome, correct_outcome]
+        valence: -0.8  # negative — repels
+
+      - subtype: marker
+        source: BEHAVIORS_TEMPLATE.md, VALIDATION_TEMPLATE.md
+        section: "<!-- @mind:{type} {text} -->"
+        id_pattern: "moment:marker_{module}_{type}_{slug}"
+        description: "Transient attention signal (todo, proposition, escalation)"
+        fields: [marker_type]
+
+      - subtype: sync_snapshot
+        source: SYNC_TEMPLATE.md
+        section: "## CURRENT STATE"
+        id_pattern: "moment:sync_snapshot_{module}_{date}"
+        description: "Point-in-time state capture of a module"
+        fields: [timestamp]
+
+      - subtype: change_record
+        source: SYNC_TEMPLATE.md
+        section: "## RECENT CHANGES → ### {date}: {summary}"
+        id_pattern: "moment:change_{slug}_{date}"
+        description: "Historical record of a specific change"
+        fields: [timestamp]
+
+      - subtype: issue
+        source: SYNC_TEMPLATE.md
+        section: "## KNOWN ISSUES → ### {issue}"
+        id_pattern: "moment:issue_{slug}"
+        description: "Active problem with severity, symptom, suspected cause"
+        fields: [severity, symptom, suspected_cause, attempted]
+
+  # --- Narrative subtypes ---
+  # Narratives are interpretive structures: objectives, patterns, algorithms,
+  # invariants, decisions, flow analyses, health checks, tasks, etc.
+  narrative:
+    l2_subtypes:
+      - subtype: objective
+        source: OBJECTIVES_TEMPLATE.md
+        section: "## PRIMARY OBJECTIVES → numbered list"
+        id_pattern: "narrative:obj_{slug}"
+        description: "Ranked module objective with justification"
+        weight_formula: "1.0 - (rank - 1) * 0.2"
+
+      - subtype: non_objective
+        source: OBJECTIVES_TEMPLATE.md
+        section: "## NON-OBJECTIVES → bullet list"
+        id_pattern: "narrative:non_obj_{slug}"
+        description: "Explicit exclusion — what the module does NOT optimize"
+        valence: -0.7  # negative — repels
+
+      - subtype: tradeoff
+        source: OBJECTIVES_TEMPLATE.md
+        section: "## TRADEOFFS → bullet list"
+        id_pattern: "narrative:tradeoff_{a}_{b}"
+        description: "Canonical decision between competing objectives"
+
+      - subtype: problem_statement
+        source: PATTERNS_TEMPLATE.md
+        section: "## THE PROBLEM"
+        id_pattern: "narrative:problem_{module}"
+        description: "What problem the module solves and why it matters"
+
+      - subtype: pattern
+        source: PATTERNS_TEMPLATE.md, IMPLEMENTATION_TEMPLATE.md
+        section: "## THE PATTERN / ### Code Patterns in Use"
+        id_pattern: "narrative:pattern_{module}"
+        description: "Core design approach or architecture pattern"
+
+      - subtype: principle
+        source: PATTERNS_TEMPLATE.md
+        section: "## PRINCIPLES → ### Principle {N}: {name}"
+        id_pattern: "narrative:principle_{module}_{slug}"
+        description: "Design principle supporting the pattern"
+
+      - subtype: scope_boundary
+        source: PATTERNS_TEMPLATE.md
+        section: "## SCOPE → ### In Scope / ### Out of Scope"
+        id_pattern: "narrative:scope_{in|out}_{module}_{slug}"
+        description: "Explicit scope boundary — positive or negative valence"
+
+      - subtype: inspiration
+        source: PATTERNS_TEMPLATE.md
+        section: "## INSPIRATIONS"
+        id_pattern: "narrative:inspiration_{module}_{slug}"
+        description: "Prior art or theory that informed the design"
+
+      - subtype: algorithm
+        source: ALGORITHM_TEMPLATE.md
+        section: "## OVERVIEW"
+        id_pattern: "narrative:algo_{module}"
+        description: "Top-level algorithm description — anchor node"
+
+      - subtype: algorithm_step
+        source: ALGORITHM_TEMPLATE.md
+        section: "## ALGORITHM → ### Step {N}: {name}"
+        id_pattern: "narrative:algo_{module}_step_{N}"
+        description: "Sequential step in an algorithm"
+
+      - subtype: decision_point
+        source: ALGORITHM_TEMPLATE.md
+        section: "## KEY DECISIONS → ### D{N}: {name}"
+        id_pattern: "narrative:algo_{module}_decision_{N}"
+        description: "Branch point with IF/ELSE logic"
+
+      - subtype: invariant
+        source: VALIDATION_TEMPLATE.md
+        section: "## INVARIANTS → ### V{N}: {value}"
+        id_pattern: "narrative:invariant_{module}_v{N}"
+        description: "Value-protecting property — MUST/NEVER contract"
+        fields: [must, never]
+
+      - subtype: anti_pattern
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "### Anti-Patterns to Avoid"
+        id_pattern: "narrative:anti_pattern_{slug}_{module}"
+        description: "Forbidden code pattern with alternative"
+        valence: -0.7
+
+      - subtype: boundary
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "### Boundaries"
+        id_pattern: "narrative:boundary_{slug}_{module}"
+        description: "Encapsulation boundary — inside/outside/interface"
+
+      - subtype: data_flow
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## DATA FLOW AND DOCKING → ### {Flow Name}"
+        id_pattern: "narrative:flow_{slug}_{module}"
+        description: "Data transformation flow with docking points"
+
+      - subtype: logic_chain
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## LOGIC CHAINS → ### LC{N}: {name}"
+        id_pattern: "narrative:chain_{slug}_{module}"
+        description: "Sequential function call chain"
+
+      - subtype: runtime_phase
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## RUNTIME BEHAVIOR → ### {Initialization|Main Loop|Shutdown}"
+        id_pattern: "narrative:runtime_{phase}_{module}"
+        description: "Lifecycle phase description"
+
+      - subtype: concurrency
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## CONCURRENCY MODEL"
+        id_pattern: "narrative:concurrency_{component}_{module}"
+        description: "Concurrency constraint (sync/async/threaded)"
+
+      - subtype: extraction
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## EXTRACTION CANDIDATES"
+        id_pattern: "narrative:extract_{source}_{target}"
+        description: "Proposed refactoring — move code between files"
+
+      - subtype: flow_analysis
+        source: HEALTH_TEMPLATE.md
+        section: "## FLOWS ANALYSIS"
+        id_pattern: "narrative:flow_analysis_{slug}"
+        description: "Health-oriented analysis of a data flow"
+
+      - subtype: health_check
+        source: HEALTH_TEMPLATE.md
+        section: "## HEALTH INDICATORS / ## INDICATOR: {name}"
+        id_pattern: "narrative:health_check_{slug}"
+        description: "Runtime health indicator with signals and throttling"
+        fields: [signal_healthy, signal_degraded, signal_critical,
+                 representation, aggregation_method, on_problem, task_template,
+                 throttle_trigger, throttle_max_frequency]
+
+      - subtype: sync_doc
+        source: SYNC_TEMPLATE.md
+        section: "header metadata (LAST_UPDATED, STATUS)"
+        id_pattern: "narrative:sync_{module}"
+        description: "Root doc node for a SYNC file — carries handoff context"
+
+      - subtype: task
+        source: SYNC_TEMPLATE.md, HEALTH_TEMPLATE.md
+        section: "## IN PROGRESS / ## TODO"
+        id_pattern: "narrative:task_{slug}"
+        description: "Active work item or pending todo"
+        fields: [status]
+
+  # --- Space subtypes ---
+  space:
+    l2_subtypes:
+      - subtype: module
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## CODE STRUCTURE tree (directories)"
+        id_pattern: "space:module_{slug}"
+        description: "Code directory / logical module boundary"
+
+  # --- Thing subtypes ---
+  # Things are concrete entities: files, functions, data structures,
+  # metrics, packages, configs, docking points, etc.
+  thing:
+    l2_subtypes:
+      - subtype: metric
+        source: OBJECTIVES_TEMPLATE.md, ALGORITHM_TEMPLATE.md
+        section: "## SUCCESS SIGNALS / ## COMPLEXITY"
+        id_pattern: "thing:metric_{slug}"
+        description: "Observable measurement — success signal or complexity metric"
+
+      - subtype: data_source
+        source: PATTERNS_TEMPLATE.md
+        section: "## DATA"
+        id_pattern: "thing:data_{module}_{slug}"
+        description: "External data input (file, URL, or other)"
+        fields: [source_type, source_path]
+
+      - subtype: function_contract
+        source: BEHAVIORS_TEMPLATE.md
+        section: "## INPUTS / OUTPUTS → ### Primary Function"
+        id_pattern: "thing:fn_{module}_{slug}"
+        description: "Function signature with input/output contract"
+
+      - subtype: interface_contract
+        source: BEHAVIORS_TEMPLATE.md
+        section: "## INPUTS / OUTPUTS → parameter table rows"
+        id_pattern: "thing:{input|output}_{module}_{fn}_{param}"
+        description: "Individual input or output parameter specification"
+        fields: [data_type]
+
+      - subtype: data_structure
+        source: ALGORITHM_TEMPLATE.md, IMPLEMENTATION_TEMPLATE.md
+        section: "## DATA STRUCTURES / ## SCHEMA"
+        id_pattern: "thing:ds_{slug} / thing:schema_{slug}_{module}"
+        description: "Data structure with fields and constraints"
+
+      - subtype: code_function
+        source: ALGORITHM_TEMPLATE.md, IMPLEMENTATION_TEMPLATE.md
+        section: "## HELPER FUNCTIONS / ## ENTRY POINTS / ### File Responsibilities"
+        id_pattern: "thing:fn_{slug} / thing:entry_{slug}_{module}"
+        description: "Named function or class in source code"
+
+      - subtype: code_file
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## CODE STRUCTURE tree (files)"
+        id_pattern: "thing:code_file_{slug}"
+        description: "Source file with responsibility description"
+        fields: [lines, status]
+
+      - subtype: docking_point
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## DATA FLOW → docking_points.available"
+        id_pattern: "thing:dock_{flow}_{dock_id}"
+        description: "Observable I/O point in a data flow — used by HEALTH"
+        fields: [type, direction, async_hook, needs]
+
+      - subtype: field
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## SCHEMA → required/optional fields"
+        id_pattern: "thing:field_{structure}_{field}"
+        description: "Individual field in a data structure"
+
+      - subtype: state_var
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## STATE MANAGEMENT → ### Where State Lives"
+        id_pattern: "thing:state_{slug}_{module}"
+        description: "Named state variable with scope and lifecycle"
+        fields: [scope, lifecycle, variable]
+
+      - subtype: external_package
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## MODULE DEPENDENCIES → ### External Dependencies"
+        id_pattern: "thing:pkg_{slug}"
+        description: "Third-party package dependency"
+
+      - subtype: config
+        source: IMPLEMENTATION_TEMPLATE.md
+        section: "## CONFIGURATION"
+        id_pattern: "thing:config_{slug}_{module}"
+        description: "Configuration key with default value"
+        fields: [default, file]
+
+# =============================================================================
+# LINK r.type VOCABULARY
+# =============================================================================
+#
+# All link r.types used in conversion rules. These are structural tags on links,
+# NOT cognitive relation_kinds (which are L1-only). The link's mathematical
+# dimensions (hierarchy, trust, friction, valence, etc.) carry the real semantics.
+#
+# r.type is a hard label for deterministic structural relationships.
+
+link_types:
+
+  # --- Structural / Containment ---
+  BELONGS_TO:
+    meaning: "Source is contained in / part of target"
+    hierarchy: -0.4 to -0.8  # subordinate
+    usage: "nodes → modules, files → directories, fields → structures"
+
+  CONTAINS:
+    meaning: "Source contains / owns target"
+    hierarchy: 0.4 to 0.5
+    usage: "algorithms → steps, flows → docking points"
+
+  ENTRY_POINT:
+    meaning: "Source is the entry into the target module"
+    hierarchy: 0.5
+
+  # --- Chain / Sequence ---
+  CHAIN_NEXT:
+    meaning: "Doc chain ordering (OBJECTIVES → PATTERNS → ... → SYNC)"
+    hierarchy: "position-based"
+    trust: 1.0
+    friction: 0.0
+
+  NEXT_STEP:
+    meaning: "Sequential step in an algorithm"
+    hierarchy: 0.0  # peer-to-peer
+    trust: 0.95
+
+  FLOWS_TO:
+    meaning: "Data flows from source to target"
+    hierarchy: 0.0
+    usage: "data flow diagrams, algorithm flow"
+
+  TRANSITIONS_TO:
+    meaning: "State machine transition"
+    hierarchy: 0.0
+    fields: [event]
+
+  # --- Functional / Execution ---
+  CALLS:
+    meaning: "Source calls / invokes target function"
+    hierarchy: 0.1 to 0.2
+
+  EXECUTES:
+    meaning: "Runtime phase executes target function"
+    hierarchy: 0.2
+
+  TRIGGERS:
+    meaning: "Health check triggers target task on failure"
+    hierarchy: 0.3
+
+  # --- Dependency ---
+  DEPENDS_ON:
+    meaning: "Source depends on target (internal or external)"
+    hierarchy: -0.4 to 0.2
+    friction: 0.1 to 0.2  # coupling creates friction
+
+  USES:
+    meaning: "Source uses target (data structure, helper)"
+    hierarchy: 0.3 to 0.4
+
+  FEEDS:
+    meaning: "Source feeds data into target"
+    hierarchy: -0.3 to -0.5
+
+  PRODUCES:
+    meaning: "Source produces target (function → output)"
+    hierarchy: 0.3
+
+  CAUSES:
+    meaning: "Source causes target side effect"
+    hierarchy: 0.2
+    trust: 0.7  # side effects may not always fire
+
+  # --- Reference / Provenance ---
+  REFERENCES:
+    meaning: "Source references / points to target"
+    hierarchy: -0.3 to 0.3
+    usage: "IMPL pointers, code↔doc bidirectional links, SYNC pointers"
+
+  INSPIRED_BY:
+    meaning: "Source design was inspired by target"
+    hierarchy: 0.1
+    trust: 0.5  # external references less trusted
+
+  # --- Problem / Solution ---
+  SOLVES:
+    meaning: "Pattern solves problem"
+    hierarchy: 0.3
+    valence: 0.8
+
+  ENABLES:
+    meaning: "Pattern enables behavior"
+    hierarchy: 0.2
+    valence: 0.7
+
+  PREVENTS:
+    meaning: "Source prevents target (anti-behavior, behavior prevention)"
+    hierarchy: 0.2
+    valence: -0.7
+    friction: 0.6
+
+  EXTENDS:
+    meaning: "Edge case extends core behavior"
+    hierarchy: -0.2
+
+  # --- Authority / Governance ---
+  GOVERNS:
+    meaning: "Source governs / shapes target (pattern → code, boundary → module)"
+    hierarchy: 0.3 to 0.8
+
+  CONSTRAINS:
+    meaning: "Invariant constrains behavior"
+    hierarchy: 0.5
+    trust: 1.0
+
+  OVERRIDES:
+    meaning: "Winning objective overrides losing objective (tradeoff)"
+    hierarchy: 0.3
+    friction: 0.5
+    ambivalence: 0.6
+
+  EXCLUDES:
+    meaning: "Source explicitly excludes target (non-objectives, anti-patterns)"
+    valence: -0.7
+
+  # --- Scope ---
+  SCOPES:
+    meaning: "Scope boundary defines what module owns"
+    hierarchy: -0.4
+    usage: "in-scope (valence=+0.7) or out-of-scope (valence=-0.7)"
+
+  DELEGATES_TO:
+    meaning: "Out-of-scope item delegates to another module"
+    hierarchy: 0.0  # peer delegation
+
+  # --- Validation / Health ---
+  VALIDATES:
+    meaning: "Behavior validates objective, or health check validates invariant"
+    hierarchy: -0.3 to -0.4
+
+  VALIDATED_BY:
+    meaning: "Doc section validated by test code"
+    trust: 0.9
+
+  MEASURES:
+    meaning: "Metric measures an objective"
+    hierarchy: -0.3
+    trust: 0.6  # metric may not perfectly capture objective
+
+  MEASURED_BY:
+    meaning: "Algorithm measured by complexity metric"
+    hierarchy: 0.2
+
+  MONITORS:
+    meaning: "Health check monitors a flow or docking point"
+    hierarchy: -0.2 to -0.4
+
+  ANALYZES:
+    meaning: "Flow analysis analyzes an implementation flow"
+    hierarchy: -0.3
+
+  FORWARDS_TO:
+    meaning: "Health check forwards results to destination"
+    hierarchy: 0.1
+
+  # --- Support ---
+  SUPPORTS:
+    meaning: "Principle supports pattern"
+    hierarchy: -0.3
+    valence: 0.6
+
+  IMPLEMENTS:
+    meaning: "Algorithm implements objective or behavior"
+    hierarchy: -0.4 to -0.5
+
+  # --- Lifecycle / Sync ---
+  SNAPSHOT_OF:
+    meaning: "Snapshot captures state of sync doc"
+    hierarchy: -0.2
+    permanence: 0.4  # snapshots get superseded
+
+  CHANGE_IN:
+    meaning: "Change record belongs to sync doc"
+    hierarchy: -0.2
+
+  AUTHORED_BY:
+    meaning: "Change authored by actor"
+    hierarchy: -0.4
+
+  CLAIMED_BY:
+    meaning: "Work item claimed by actor"
+    hierarchy: -0.3
+
+  MODIFIES:
+    meaning: "Change record modifies code file"
+    hierarchy: -0.1
+
+  ISSUE_IN:
+    meaning: "Issue exists in sync doc / module"
+    hierarchy: -0.3
+
+  AFFECTS:
+    meaning: "Issue affects module"
+    hierarchy: -0.3
+
+  DRIFT_IN:
+    meaning: "Doc/impl drift exists in sync doc"
+    hierarchy: -0.3
+    friction: 0.5
+
+  # --- Code Structure ---
+  DOCKS_AT:
+    meaning: "Docking point docks at code file"
+    hierarchy: -0.2
+
+  BRANCHES_AT:
+    meaning: "Decision point branches at algorithm step"
+    hierarchy: 0.0
+    friction: 0.3
+    ambivalence: 0.5
+
+  PROPOSES:
+    meaning: "Source code file proposes extraction"
+    hierarchy: 0.0
+    permanence: 0.5
+
+  # --- Annotation ---
+  FLAGS:
+    meaning: "Marker flags module/doc for attention"
+    hierarchy: -0.1 to -0.2
+    permanence: 0.3  # markers are transient
+
+  RISK:
+    meaning: "Bottleneck is a risk to algorithm"
+    hierarchy: 0.1
+    friction: 0.4
+
+  INPUT:
+    meaning: "First stage of data flow enters algorithm"
+    hierarchy: 0.3
+
+  OUTPUT:
+    meaning: "Last stage of data flow exits algorithm"
+    hierarchy: -0.3
+
+# =============================================================================
+# WEIGHT MAPPING FUNCTIONS
+# =============================================================================
+#
+# Several conversion rules reference deterministic mapping functions.
+# These are the canonical definitions.
+
+weight_mappings:
+
+  priority_to_weight:
+    CRITICAL: 0.95
+    HIGH: 0.8
+    MEDIUM: 0.6
+    LOW: 0.3
+
+  severity_to_weight:
+    critical: 1.0
+    high: 0.8
+    medium: 0.5
+    low: 0.3
+
+  severity_to_energy:
+    critical: 0.9
+    high: 0.7
+    medium: 0.4
+    low: 0.2
+
+  severity_to_friction:
+    critical: 0.95
+    high: 0.7
+    medium: 0.4
+    low: 0.15
+
+  status_to_weight:
+    in_progress: 0.7
+    blocked: 0.8
+    almost_done: 0.5
+
+  category_to_weight:
+    immediate: 0.8
+    drift: 0.7
+    later: 0.4
+    idea: 0.3
+
+  category_to_energy:
+    immediate: 0.7
+    drift: 0.6
+    later: 0.3
+    idea: 0.2
+
+# =============================================================================
+# TEMPLATE → NODE TYPE MAPPING
+# =============================================================================
+#
+# Which templates produce which node types.
+
+template_output_map:
+
+  OBJECTIVES_TEMPLATE:
+    creates:
+      - "Narrative(objective)"
+      - "Narrative(non_objective)"
+      - "Narrative(tradeoff)"
+      - "Thing(metric)"
+
+  PATTERNS_TEMPLATE:
+    creates:
+      - "Narrative(problem_statement)"
+      - "Narrative(pattern)"
+      - "Narrative(principle)"
+      - "Narrative(scope_boundary)"
+      - "Narrative(inspiration)"
+      - "Thing(data_source)"
+
+  BEHAVIORS_TEMPLATE:
+    creates:
+      - "Moment(behavior)"
+      - "Moment(side_effect)"
+      - "Moment(edge_case)"
+      - "Moment(anti_behavior)"
+      - "Moment(marker)"
+      - "Thing(function_contract)"
+      - "Thing(interface_contract)"
+
+  ALGORITHM_TEMPLATE:
+    creates:
+      - "Narrative(algorithm)"
+      - "Narrative(algorithm_step)"
+      - "Narrative(decision_point)"
+      - "Thing(data_structure)"
+      - "Thing(code_function)"
+      - "Thing(metric)"
+
+  VALIDATION_TEMPLATE:
+    creates:
+      - "Narrative(invariant)"
+      - "Narrative(marker)"
+
+  IMPLEMENTATION_TEMPLATE:
+    creates:
+      - "Space(module)"
+      - "Narrative(pattern)"
+      - "Narrative(anti_pattern)"
+      - "Narrative(boundary)"
+      - "Narrative(data_flow)"
+      - "Narrative(logic_chain)"
+      - "Narrative(runtime_phase)"
+      - "Narrative(concurrency)"
+      - "Narrative(extraction)"
+      - "Thing(code_file)"
+      - "Thing(code_function)"
+      - "Thing(docking_point)"
+      - "Thing(data_structure)"
+      - "Thing(field)"
+      - "Thing(state_var)"
+      - "Thing(external_package)"
+      - "Thing(config)"
+
+  HEALTH_TEMPLATE:
+    creates:
+      - "Narrative(flow_analysis)"
+      - "Narrative(health_check)"
+
+  SYNC_TEMPLATE:
+    creates:
+      - "Narrative(sync_doc)"
+      - "Narrative(task)"
+      - "Moment(sync_snapshot)"
+      - "Moment(change_record)"
+      - "Moment(issue)"
+
+# =============================================================================
+# TOTALS
+# =============================================================================
+#
+# 5 node types (universal)
+# 0 Actor subtypes (actors are L3 entities, not doc-chain products)
+# 8 Moment subtypes
+# 22 Narrative subtypes
+# 1 Space subtype
+# 12 Thing subtypes
+# --- 43 total L2 subtypes ---
+#
+# 47 link r.types
+#
+# 7 weight mapping functions
+# 8 templates in the doc chain
+
+# =============================================================================
+# INVARIANTS
+# =============================================================================
+
+l2_invariants:
+  - "Same 5 universal node types — no L2-specific types"
+  - "Subtypes are free text on NodeBase.subtype — this schema catalogs, not constrains"
+  - "r.type is a structural tag, NOT a cognitive relation_kind"
+  - "All link dimensions from LinkBase apply (weight, trust, friction, hierarchy, etc.)"
+  - "Zero LLM involvement — parsing is deterministic regex/YAML"
+  - "One conversion rule per template section — never multiple rules for the same section"
+  - "Slugify is deterministic: lowercase, replace spaces/special chars with underscore"
+  - "Weight mappings are the only 'constants' — they map human categories to [0,1] values"
+  - "Negative valence indicates exclusion/repulsion (non-objectives, anti-patterns, anti-behaviors)"
+
+# =============================================================================
+# POINTERS
+# =============================================================================
+#
+# Conversion rule templates:   ai_devboard/conversion-ruleset/*_TEMPLATE.md
+# Grammar cluster definitions: ai_devboard/docs/GRAMMAR_L2_Code_Clusters.yaml
+# Grammar cluster batch 3:     ai_devboard/docs/GRAMMAR_L2_Code_Clusters_Batch3.yaml
+# L1 schema:                   mind-mcp/schema-l1.yaml
+# L3 schema:                   mind-mcp/schema-l3.yaml

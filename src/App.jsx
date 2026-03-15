@@ -17,11 +17,38 @@ function App() {
   const [graphs, setGraphs] = useState([])
   const [status, setStatus] = useState('Ready')
   const [tickSpeed, setTickSpeed] = useState(0) // 0=paused, 1=x1, 2=x2, 3=x3
+  const [streaming, setStreaming] = useState(false)
   const tickRef = useRef(null)
+  const sseRef = useRef(null)
+  const simRef = useRef(null) // hold D3 simulation for live updates
 
   useEffect(() => {
     fetch('/api/graphs').then(r => r.json()).then(setGraphs).catch(() => {})
   }, [])
+
+  // SSE stream — subscribe to graph deltas
+  useEffect(() => {
+    if (sseRef.current) { sseRef.current.close(); sseRef.current = null }
+
+    const es = new EventSource(`/api/stream/${graphName}`)
+    sseRef.current = es
+
+    es.onopen = () => setStreaming(true)
+    es.onerror = () => setStreaming(false)
+
+    es.addEventListener('tick', (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data.nodes && data.links) {
+          renderGraph(data.nodes, data.links)
+        }
+        const deltaCount = data.deltas?.length || 0
+        setStatus(`SSE tick: ${data.decayed || 0} decayed, ${data.propagated || 0} propagated, ${deltaCount} deltas`)
+      } catch (_) {}
+    })
+
+    return () => { es.close(); sseRef.current = null }
+  }, [graphName])
 
   // Tick loop
   useEffect(() => {
@@ -42,9 +69,12 @@ function App() {
         body: JSON.stringify({ graph: graphName }),
       })
       const data = await res.json()
-      setStatus(`Tick: ${data.decayed || 0} decayed, ${data.propagated || 0} propagated`)
-      // Auto-refresh the graph
-      runQuery()
+      // If SSE is connected, the tick event will push the graph update
+      // If not connected, fall back to polling
+      if (!streaming) {
+        setStatus(`Tick: ${data.decayed || 0} decayed, ${data.propagated || 0} propagated`)
+        runQuery()
+      }
     } catch (e) { setStatus(`Tick error: ${e.message}`) }
   }
 
@@ -132,6 +162,9 @@ function App() {
           <button className={tickSpeed === 3 ? 'active' : ''} onClick={() => setTickSpeed(3)}>▶▶▶ x3</button>
           <button onClick={runTick}>⚡ 1 tick</button>
         </div>
+        <span className={`stream-indicator ${streaming ? 'live' : 'off'}`}>
+          {streaming ? 'SSE LIVE' : 'SSE OFF'}
+        </span>
         <span className="status">{status}</span>
         <div className="legend">
           {Object.entries(COLORS).map(([k, v]) => <span key={k} style={{ color: v }}>● {k} </span>)}

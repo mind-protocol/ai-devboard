@@ -7,6 +7,42 @@ app.use(express.json())
 const redis = createClient({ url: `redis://${process.env.FALKORDB_HOST || 'localhost'}:${process.env.FALKORDB_PORT || 6379}` })
 await redis.connect()
 
+// --- SSE Stream ---
+// Map<graphName, Set<Response>>
+const sseClients = new Map()
+let eventCounter = 0
+
+function sseEmit(graph, event, data) {
+  const clients = sseClients.get(graph)
+  if (!clients || clients.size === 0) return
+  eventCounter++
+  const payload = `id: ${eventCounter}\nevent: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+  for (const res of clients) {
+    res.write(payload)
+  }
+}
+
+app.get('/api/stream/:graph', (req, res) => {
+  const { graph } = req.params
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive',
+  })
+  res.write(`data: ${JSON.stringify({ connected: true, graph })}\n\n`)
+
+  if (!sseClients.has(graph)) sseClients.set(graph, new Set())
+  sseClients.get(graph).add(res)
+
+  // Heartbeat every 15s to keep connection alive
+  const hb = setInterval(() => res.write(': heartbeat\n\n'), 15000)
+
+  req.on('close', () => {
+    clearInterval(hb)
+    sseClients.get(graph)?.delete(res)
+  })
+})
+
 // List all graphs
 app.get('/api/graphs', async (req, res) => {
   try {
@@ -36,13 +72,23 @@ app.post('/api/query', async (req, res) => {
   }
 })
 
-// Run a physics tick — apply decay + propagation
+// Run a physics tick — apply decay + propagation, emit delta via SSE
 app.post('/api/tick', async (req, res) => {
   const { graph } = req.body
   if (!graph) return res.json({ error: 'Missing graph' })
 
   try {
     const DECAY_RATE = 0.02
+
+    // Snapshot energy before tick (for delta detection)
+    let energyBefore = new Map()
+    try {
+      const snap = await redis.sendCommand(['GRAPH.QUERY', graph,
+        `MATCH (n) WHERE n.energy IS NOT NULL RETURN n.id, n.energy`])
+      for (const row of (snap?.[1] || [])) {
+        if (Array.isArray(row) && row.length >= 2) energyBefore.set(row[0], row[1])
+      }
+    } catch (_) { /* snapshot is best-effort */ }
 
     // Decay energy on all nodes
     const decayed = await redis.sendCommand(['GRAPH.QUERY', graph,
@@ -61,7 +107,40 @@ app.post('/api/tick', async (req, res) => {
     await redis.sendCommand(['GRAPH.QUERY', graph,
       `MATCH (n) WHERE n.recency > 0 SET n.recency = n.recency * 0.99`])
 
-    res.json({ decayed: decayCount, propagated: propCount })
+    // Collect post-tick state and compute deltas
+    const tickResult = { decayed: decayCount, propagated: propCount }
+
+    if (sseClients.has(graph) && sseClients.get(graph).size > 0) {
+      try {
+        const raw = await redis.sendCommand(['GRAPH.QUERY', graph,
+          `MATCH (n)-[r]->(m) RETURN n, r, m`])
+        const fullGraph = parseGraphResult(raw)
+
+        // Compute energy deltas
+        const deltas = []
+        for (const node of fullGraph.nodes) {
+          const before = energyBefore.get(node.name) ?? energyBefore.get(node.id)
+          if (before !== undefined && node.energy !== undefined) {
+            const delta = node.energy - before
+            if (Math.abs(delta) > 0.001) {
+              deltas.push({ id: node.id, name: node.name, delta: +delta.toFixed(4), energy: +node.energy.toFixed(4) })
+            }
+          }
+        }
+
+        sseEmit(graph, 'tick', {
+          ...tickResult,
+          nodes: fullGraph.nodes,
+          links: fullGraph.links,
+          deltas,
+        })
+      } catch (_) {
+        // SSE emission is best-effort — tick still succeeds
+        sseEmit(graph, 'tick', tickResult)
+      }
+    }
+
+    res.json(tickResult)
   } catch (e) {
     res.json({ error: e.message, decayed: 0, propagated: 0 })
   }

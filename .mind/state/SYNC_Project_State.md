@@ -2,7 +2,7 @@
 
 ```
 LAST_UPDATED: 2026-03-15
-UPDATED_BY: Tomaso Nervo (@nervo) — L2 cluster expansion
+UPDATED_BY: Tomaso Nervo (@nervo) — L2 conversion ruleset complete
 ```
 
 ---
@@ -58,7 +58,7 @@ Parse repo → Space nodes (dirs), Thing nodes (files, functions with EvidenceRe
 | Interaction (MCP & Tools) | `docs/interaction/` | DESIGNING |
 | Process (Knowledge & Routines) | `docs/process/` | DESIGNING |
 | SubEntity (Zero-LLM Exploration) | `docs/subentity/` | CANONICAL |
-| Grammar (Physics → Language) | `docs/grammar/` | CANONICAL (L1+L2: 16 clusters) |
+| Grammar (Physics → Language) | `docs/grammar/` | CANONICAL (L1+L2: 26 clusters) |
 
 ---
 
@@ -77,6 +77,8 @@ Parse repo → Space nodes (dirs), Thing nodes (files, functions with EvidenceRe
 - Home server proxy (single port) — CODED
 - Organization L2 runtime — SEEDED
 - DevBoard prototype (Vite+D3) — PROTOTYPE
+- L2 Code Grammar conversion ruleset — CANONICAL (7 templates, 43 subtypes, 47 link r.types)
+- schema-l2.yaml — CANONICAL (full L2 subtype + link type catalog)
 
 ---
 
