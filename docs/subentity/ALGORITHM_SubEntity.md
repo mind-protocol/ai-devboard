@@ -625,8 +625,9 @@ autonomy_levels:
   NOTIFY:   guarded        # sends messages to other citizens/channels
   TEST:     autonomous     # running tests is safe (read-only on the codebase)
   SUBCALL:  autonomous     # zero-LLM, graph-only — safe
-  COMMIT:   human_required # never commit without human approval
-  PUSH:     human_required # never push without human approval
+  COMMIT:   autonomous     # commit after successful write + verify cycle
+  PUSH:     guarded        # push to remote — check branch is not main
+  FORCE_PUSH: human_required # destructive — never without human
   DELETE:   human_required # never delete without human approval
 ```
 
@@ -988,18 +989,23 @@ Every action a citizen can take at L2 — whether awake or asleep — falls into
 | Wait | No action meets threshold | Energy decays, next tick re-evaluates |
 | Change strategy | Frustration + reflection | New process node activated in L1 |
 
+### BUILD (creates artifacts)
+
+| Action | Tool | Autonomy | When | Side Effects |
+|--------|------|----------|------|--------------|
+| Git commit | `bash: git commit` | autonomous | After successful WRITE + VERIFY | Moment created in L2, graph state in message |
+| Create PR | `bash: gh pr create` | guarded | After commit, when branch is ready | Public-facing, needs competence check |
+
 ### NEVER (human_required)
 
 | Action | Why |
 |--------|-----|
-| `git commit` | Irreversible history change |
-| `git push` | Affects shared remote |
-| `git reset --hard` | Destructive |
-| `rm -rf` | Destructive |
-| Deploy | Production impact |
-| Create PR | Public-facing action |
-| Close issue | External system state |
-| Send email | External communication |
+| `git push --force` | Destructive, rewrites shared history |
+| `git reset --hard` | Destructive, loses uncommitted work |
+| `rm -rf` | Destructive, irreversible |
+| Deploy to production | Production impact |
+| Send email | External communication outside the system |
+| Delete branch with unmerged work | Potential data loss |
 
 ---
 
