@@ -10,6 +10,50 @@ const COLORS = {
   Thing: '#10b981',
 }
 
+// Universe colors — one per graph
+const GRAPH_COLORS = {
+  org_ai_dev_dashboard: '#3b82f6',
+  venezia: '#f59e0b',
+  lumina_prime: '#8b5cf6',
+  mind_protocol: '#10b981',
+  serenissima: '#ec4899',
+  mind_mcp: '#06b6d4',
+  cities_of_light: '#f43f5e',
+  contre_terre: '#84cc16',
+  blood_ledger: '#ef4444',
+}
+
+// "il y a X minutes" formatter
+function timeAgo(epochSeconds) {
+  if (!epochSeconds) return ''
+  const diff = Math.floor(Date.now() / 1000) - epochSeconds
+  if (diff < 60) return `${diff}s`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`
+  return `${Math.floor(diff / 86400)}d`
+}
+
+// Format name: if it looks like a handle (citizen:xxx), show @xxx in bold
+function formatName(name, id) {
+  const display = name || id || ''
+  // If origin is a handle
+  return display
+}
+
+function formatOrigin(origin) {
+  if (!origin) return ''
+  return `@${origin}`
+}
+
+// Bold @handles in text
+function boldHandles(text) {
+  if (!text || !text.includes('@')) return text
+  const parts = text.split(/(@\w+)/g)
+  return parts.map((part, i) =>
+    part.startsWith('@') ? <span key={i} className="handle-tag">{part}</span> : part
+  )
+}
+
 // Node health score: 0-5 stars
 // Good = high stability, reasonable weight, low friction, some energy
 // Bad = low stability, high friction, no energy, pending status
@@ -355,19 +399,19 @@ function App() {
               {sortedNodes.map((n, i) => (
                 <tr key={i} className={`node-row type-${(n.label || '').toLowerCase()}`}>
                   <td className="col-score">{starScore(n)}</td>
-                  <td className="col-graph">{n.graph}</td>
+                  <td className="col-graph"><span className="graph-tag" style={{ borderColor: GRAPH_COLORS[n.graph] || '#444' }}>{n.graph}</span></td>
                   <td><span className="type-badge" style={{ background: COLORS[n.label] || '#666' }}>{n.label}</span></td>
                   <td className="col-subtype">{n.subtype || ''}</td>
-                  <td className="col-name" title={n.id}>{n.name || n.id}</td>
-                  <td className="col-content" title={n.content || n.synthesis}>{(n.synthesis || n.content || '').slice(0, 60)}</td>
+                  <td className="col-name" title={n.id}><span className="name-text">{boldHandles(n.name || n.id)}</span></td>
+                  <td className="col-content" title={n.content || n.synthesis}>{boldHandles((n.synthesis || n.content || '').slice(0, 80))}</td>
                   <td className="col-num">{n.energy?.toFixed(2)}</td>
                   <td className="col-num">{n.weight?.toFixed(1)}</td>
                   <td className="col-num">{n.stability?.toFixed(2)}</td>
                   <td className="col-num col-friction">{n.friction > 0 ? n.friction.toFixed(2) : ''}</td>
                   <td className="col-status">{n.status || ''}</td>
-                  <td className="col-origin">{n.origin || ''}</td>
+                  <td className="col-origin">{n.origin ? <span className="handle-tag">@{n.origin}</span> : ''}</td>
                   <td className="col-source">{n.source || ''}</td>
-                  <td className="col-time">{n.updated ? new Date(n.updated * 1000).toLocaleTimeString() : ''}</td>
+                  <td className="col-time" title={n.updated ? new Date(n.updated * 1000).toLocaleString() : ''}>{timeAgo(n.updated)}</td>
                 </tr>
               ))}
             </tbody>

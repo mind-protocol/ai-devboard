@@ -166,6 +166,66 @@ app.get('/api/nodes/:graph', async (req, res) => {
   } catch (e) { res.json([]) }
 })
 
+// Full citizen dashboard — L1 + L2 state, tasks, messages, active nodes
+app.get('/api/dashboard/:graph', async (req, res) => {
+  const { graph } = req.params
+  try {
+    const citizenRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+      `MATCH (a:Actor) WHERE a.subtype = 'citizen' RETURN a.id, a.name, a.role, a.energy, a.weight, a.updated_at_s ORDER BY a.energy DESC`])
+    const now = Math.floor(Date.now() / 1000)
+    const citizens = []
+
+    for (const row of (citizenRes?.[1] || [])) {
+      const [id, name, role, energy, weight, updated] = row
+      const handle = id?.replace('citizen:', '')
+      const brain = `brain_${handle}`
+      const c = { handle, name, role, energy: parseFloat(energy) || 0, weight: parseFloat(weight) || 0, lastActive: null, task: null, lastMsg: null, l2Active: [], l1Active: [] }
+
+      // Last active
+      try {
+        const msgRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+          `MATCH (a:Actor {id: '${id}'})-[r:link]->(m:Moment) WHERE r.r_type = 'CREATED' RETURN m.created_at_s ORDER BY m.created_at_s DESC LIMIT 1`])
+        const ts = msgRes?.[1]?.[0]?.[0]
+        if (ts) c.lastActive = parseInt(ts)
+      } catch (_) {}
+      if (!c.lastActive && updated) c.lastActive = parseInt(updated)
+
+      // Current task
+      try {
+        const taskRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+          `MATCH (m:Moment)-[r:link]->(a:Actor {id: '${id}'}) WHERE m.type = 'task_run' AND m.status IN ['running','claimed'] RETURN m.name, m.status, m.energy LIMIT 1`])
+        const t = taskRes?.[1]?.[0]
+        if (t) c.task = { name: t[0], status: t[1], energy: parseFloat(t[2]) || 0 }
+      } catch (_) {}
+
+      // Last message
+      try {
+        const msgRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+          `MATCH (a:Actor {id: '${id}'})-[r:link]->(m:Moment) WHERE r.r_type = 'CREATED' AND m.type = 'message' RETURN m.name, m.created_at_s ORDER BY m.created_at_s DESC LIMIT 1`])
+        const m = msgRes?.[1]?.[0]
+        if (m) c.lastMsg = { text: m[0], at: parseInt(m[1]) || 0 }
+      } catch (_) {}
+
+      // L2 active nodes
+      try {
+        const l2Res = await redis.sendCommand(['GRAPH.QUERY', graph,
+          `MATCH (a:Actor {id: '${id}'})-[r:link]-(n) WHERE n.energy > 0.01 RETURN labels(n)[0], n.name, n.energy, n.subtype ORDER BY n.energy DESC LIMIT 5`])
+        c.l2Active = (l2Res?.[1] || []).map(n => ({ type: n[0], name: n[1], energy: parseFloat(n[2]) || 0, subtype: n[3] || '' }))
+      } catch (_) {}
+
+      // L1 brain nodes
+      try {
+        const l1Res = await redis.sendCommand(['GRAPH.QUERY', brain,
+          `MATCH (n) WHERE n.energy > 0.01 RETURN labels(n)[0], n.subtype, n.name, n.energy ORDER BY n.energy DESC LIMIT 5`])
+        c.l1Active = (l1Res?.[1] || []).map(n => ({ type: n[0], subtype: n[1] || '', name: n[2], energy: parseFloat(n[3]) || 0 }))
+      } catch (_) {}
+
+      citizens.push(c)
+    }
+    res.json(citizens)
+  } catch (e) { res.json({ error: e.message }) }
+})
+
 // Citizen status — current state of all citizens
 app.get('/api/citizens/:graph', async (req, res) => {
   const { graph } = req.params
