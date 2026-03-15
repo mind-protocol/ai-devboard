@@ -1280,6 +1280,63 @@ Active, community, exterior, changing, energizing. High affiliation + high bored
 score_connect = affiliation × (curiosity + boredom) × 0.5 × (1 - anxiety) × (1 - frustration × 0.5)
 ```
 
+### Target Selection (what to act on)
+
+Many behaviors need a target — which file to read, which citizen to call, which task to assess. Target selection uses the same physics:
+
+```
+on select_target(citizen, behavior_cluster):
+    candidates = get_available_targets(behavior_cluster)
+
+    for each candidate:
+        # Primary: embedding alignment with active desire
+        desire_match = max(cosine_sim(candidate.embedding, desire.embedding)
+                          for desire in citizen.active_desires)
+
+        # Secondary: energy × weight (salience)
+        salience = candidate.energy × candidate.weight
+
+        # Score
+        target_score = desire_match × salience
+
+    # If no desire-driven match, fall back to random
+    if max(target_scores) < 0.1:
+        return random_choice(candidates)
+
+    return weighted_random_choice(target_scores)
+```
+
+### Emotional Memory Bias (last 24h)
+
+The citizen's recent emotional experience biases behavior selection. Moments from the last 24 hours carry an emotional imprint — if a behavior cluster produced negative valence recently, the citizen avoids it:
+
+```
+on compute_emotional_bias(citizen, cluster):
+    recent_moments = citizen.l1.moments
+        .filter(m => m.timestamp > now - 24h)
+        .filter(m => m.behavior_cluster == cluster)
+
+    if recent_moments is empty:
+        return 1.0  # no bias — neutral
+
+    # Sum emotional valence of recent moments for this cluster
+    valence_sum = sum(m.valence for m in recent_moments)
+
+    # Negative valence → avoidance (score multiplier < 1)
+    # Positive valence → attraction (score multiplier > 1)
+    # Bounded to [0.2, 2.0] to prevent total blockage or runaway
+    bias = clamp(1.0 + valence_sum × 0.3, 0.2, 2.0)
+
+    return bias
+```
+
+This means:
+- Citizen tried FOCUS on `salience.js` yesterday and it went badly (frustration, negative valence) → `score_focus` gets multiplied by 0.5 → they're less likely to try again today
+- Citizen did REACH OUT to @voce yesterday and got a great answer (satisfaction, positive valence) → `score_reach_out` gets multiplied by 1.4 → they're more likely to ask again
+- A citizen who had a terrible debugging session (negative VERIFY moments) will naturally avoid VERIFY for a while — boredom or curiosity will push them elsewhere until the aversion decays
+
+The bias decays as moments age (recency field). A bad experience from 23 hours ago has less effect than one from 1 hour ago.
+
 ### Selection Formula
 
 ```
