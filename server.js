@@ -60,18 +60,11 @@ app.post('/api/query', async (req, res) => {
   if (!graph || !query) return res.json({ error: 'Missing graph or query' })
 
   try {
-    const raw = await redis.sendCommand(['GRAPH.QUERY', graph, query, '--compact'])
+    const raw = await redis.sendCommand(['GRAPH.QUERY', graph, query])
     const parsed = parseGraphResult(raw)
     res.json(parsed)
   } catch (e) {
-    // Try non-compact
-    try {
-      const raw = await redis.sendCommand(['GRAPH.QUERY', graph, query])
-      const parsed = parseGraphResult(raw)
-      res.json(parsed)
-    } catch (e2) {
-      res.json({ error: e2.message, nodes: [], links: [] })
-    }
+    res.json({ error: e.message, nodes: [], links: [] })
   }
 })
 
@@ -277,37 +270,55 @@ function parseGraphResult(raw) {
   if (!raw || !Array.isArray(raw)) return { nodes: [], links: [] }
 
   // FalkorDB returns: [header, [rows...], stats]
-  const header = raw[0]
   const rows = raw[1] || []
+
+  // Helper: convert [[key, value], ...] array to object
+  function pairsToObj(pairs) {
+    if (!Array.isArray(pairs)) return pairs
+    const obj = {}
+    for (const pair of pairs) {
+      if (Array.isArray(pair) && pair.length === 2) {
+        const [k, v] = pair
+        // Recursively convert nested pairs (like properties)
+        obj[k] = Array.isArray(v) && v.length > 0 && Array.isArray(v[0]) && v[0].length === 2
+          ? pairsToObj(v)
+          : v
+      }
+    }
+    return obj
+  }
 
   for (const row of rows) {
     if (!Array.isArray(row)) continue
     for (const cell of row) {
-      if (!cell || typeof cell !== 'object') continue
+      if (!cell || !Array.isArray(cell)) continue
 
-      // Node
-      if (cell.id !== undefined && cell.labels !== undefined) {
-        const props = cell.properties || {}
-        nodes.set(cell.id, {
-          id: props.id || `node_${cell.id}`,
-          graphId: cell.id,
-          label: (cell.labels || ['?'])[0],
-          name: props.name || props.id || `node_${cell.id}`,
-          weight: props.weight || 0,
-          energy: props.energy || 0,
+      const obj = pairsToObj(cell)
+
+      // Node: has id + labels + properties
+      if (obj.id !== undefined && obj.labels !== undefined) {
+        const props = obj.properties || {}
+        const label = Array.isArray(obj.labels) ? obj.labels[0] : obj.labels
+        nodes.set(obj.id, {
+          id: props.id || `node_${obj.id}`,
+          graphId: obj.id,
+          label: label || '?',
+          name: props.name || props.id || `node_${obj.id}`,
+          weight: parseFloat(props.weight) || 0,
+          energy: parseFloat(props.energy) || 0,
           subtype: props.subtype || props.type || '',
         })
       }
 
-      // Edge
-      if (cell.src_node !== undefined && cell.dest_node !== undefined) {
-        const props = cell.properties || {}
+      // Edge: has id + type + src_node + dest_node + properties
+      if (obj.src_node !== undefined && obj.dest_node !== undefined) {
+        const props = obj.properties || {}
         links.push({
-          source: cell.src_node,
-          target: cell.dest_node,
-          type: props.type || cell.relation || '',
-          weight: props.weight || 0.5,
-          trust: props.trust || 0,
+          source: obj.src_node,
+          target: obj.dest_node,
+          type: props.r_type || props.type || obj.type || '',
+          weight: parseFloat(props.weight) || 0.5,
+          trust: parseFloat(props.trust) || 0,
         })
       }
     }
@@ -320,7 +331,7 @@ function parseGraphResult(raw) {
     ...l,
     source: idMap.get(l.source) || l.source,
     target: idMap.get(l.target) || l.target,
-  })).filter(l => idMap.has(typeof l.source === 'object' ? 0 : nodes.size) || true)
+  })).filter(l => typeof l.source === 'string' && typeof l.target === 'string')
 
   return { nodes: [...nodes.values()], links: remappedLinks }
 }

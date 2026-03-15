@@ -38,6 +38,10 @@ function App() {
   const [view, setView] = useState('nodes') // 'graph' | 'nodes'
   const [nodeList, setNodeList] = useState([])
   const [timeFilter, setTimeFilter] = useState(10) // minutes
+  const [sortCol, setSortCol] = useState('energy') // default sort column
+  const [sortDir, setSortDir] = useState(-1) // -1 = desc, 1 = asc
+  const [typeFilter, setTypeFilter] = useState(new Set()) // empty = show all
+  const [searchText, setSearchText] = useState('') // text search across fields
   const tickRef = useRef(null)
   const sseRef = useRef(null)
   const simRef = useRef(null) // hold D3 simulation for live updates
@@ -120,7 +124,7 @@ function App() {
 
       // Then load other graphs in parallel
       const otherGraphs = (graphs.length > 0 ? graphs : [])
-        .filter(g => g !== graphName && !g.startsWith('brain_') && !g.startsWith('test') && g !== '_health_check')
+        .filter(g => g !== graphName && !g.startsWith('brain_') && !g.startsWith('test') && !g.startsWith('//') && !g.includes('.') && !g.includes(':') && g !== '_health_check')
         .slice(0, 20) // cap at 20 graphs
       const fetches = otherGraphs.map(g =>
         fetch(`/api/nodes/${g}?limit=500&since=${since}`).then(r => r.json()).then(nodes => {
@@ -130,7 +134,7 @@ function App() {
       await Promise.all(fetches)
       allNodes.sort((a, b) => (b.energy || 0) - (a.energy || 0))
       setNodeList(allNodes)
-      setStatus(`${allNodes.length} nodes across ${graphList.length} graphs`)
+      setStatus(`${allNodes.length} nodes across ${otherGraphs.length + 1} graphs`)
     } catch (e) { setStatus(`Error: ${e.message}`) }
   }
 
@@ -201,6 +205,61 @@ function App() {
       .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null })
   }
 
+  const columns = [
+    { key: 'score', label: 'Score', get: n => { const s = starScore(n); return s.length } },
+    { key: 'graph', label: 'Graph', get: n => n.graph || '' },
+    { key: 'type', label: 'Type', get: n => n.label || '' },
+    { key: 'subtype', label: 'Subtype', get: n => n.subtype || '' },
+    { key: 'name', label: 'Name', get: n => (n.name || n.id || '').toLowerCase() },
+    { key: 'content', label: 'Content', get: n => (n.synthesis || n.content || '').toLowerCase() },
+    { key: 'energy', label: 'E', get: n => n.energy || 0 },
+    { key: 'weight', label: 'W', get: n => n.weight || 0 },
+    { key: 'stability', label: 'S', get: n => n.stability || 0 },
+    { key: 'friction', label: 'F', get: n => n.friction || 0 },
+    { key: 'status', label: 'Status', get: n => n.status || '' },
+    { key: 'origin', label: 'Origin', get: n => n.origin || '' },
+    { key: 'source', label: 'Source', get: n => n.source || '' },
+    { key: 'updated', label: 'Updated', get: n => n.updated || 0 },
+  ]
+
+  const toggleSort = (key) => {
+    if (sortCol === key) setSortDir(d => d * -1)
+    else { setSortCol(key); setSortDir(-1) }
+  }
+
+  const toggleType = (type) => {
+    setTypeFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(type)) next.delete(type); else next.add(type)
+      return next
+    })
+  }
+
+  const sortedNodes = (() => {
+    let list = nodeList
+    if (typeFilter.size > 0) list = list.filter(n => typeFilter.has(n.label))
+    if (searchText) {
+      const q = searchText.toLowerCase()
+      list = list.filter(n =>
+        (n.name || '').toLowerCase().includes(q) ||
+        (n.id || '').toLowerCase().includes(q) ||
+        (n.synthesis || '').toLowerCase().includes(q) ||
+        (n.content || '').toLowerCase().includes(q) ||
+        (n.subtype || '').toLowerCase().includes(q) ||
+        (n.origin || '').toLowerCase().includes(q) ||
+        (n.source || '').toLowerCase().includes(q) ||
+        (n.graph || '').toLowerCase().includes(q)
+      )
+    }
+    const col = columns.find(c => c.key === sortCol)
+    if (!col) return list
+    return [...list].sort((a, b) => {
+      const va = col.get(a), vb = col.get(b)
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * sortDir
+      return String(va).localeCompare(String(vb)) * sortDir
+    })
+  })()
+
   return (
     <div className="app">
       <div className="toolbar">
@@ -224,12 +283,37 @@ function App() {
           <button className={view === 'graph' ? 'active' : ''} onClick={() => setView('graph')}>Graph</button>
           <button className={view === 'nodes' ? 'active' : ''} onClick={() => { setView('nodes'); loadNodeList() }}>Nodes</button>
           {view === 'nodes' && <>
+            <span className="filter-sep">|</span>
+            <div className="search-box">
+              <input className="search-input" value={searchText}
+                onChange={e => setSearchText(e.target.value)}
+                placeholder="Search nodes..." />
+              {searchText && <button className="search-clear" onClick={() => setSearchText('')}>✕</button>}
+            </div>
+            <span className="filter-sep">|</span>
             {[10, 60, 1440, 0].map(m => (
               <button key={m} className={timeFilter === m ? 'active' : ''}
                 onClick={() => { setTimeFilter(m); setTimeout(loadNodeList, 50) }}>
                 {m === 0 ? 'All' : m < 60 ? `${m}m` : m < 1440 ? `${m/60}h` : '24h'}
               </button>
             ))}
+            <span className="filter-sep">|</span>
+            {Object.keys(COLORS).map(t => (
+              <button key={t} className={`type-filter-btn ${typeFilter.has(t) ? 'active' : ''}`}
+                style={{ borderColor: COLORS[t], color: typeFilter.has(t) ? '#fff' : COLORS[t],
+                  background: typeFilter.has(t) ? COLORS[t] : 'transparent' }}
+                onClick={() => toggleType(t)}>
+                {t}
+              </button>
+            ))}
+            {typeFilter.size > 0 && (
+              <button className="type-filter-clear" onClick={() => setTypeFilter(new Set())}>✕</button>
+            )}
+            <span className="node-count">
+              {sortedNodes.length !== nodeList.length
+                ? `${sortedNodes.length} / ${nodeList.length}`
+                : nodeList.length} nodes
+            </span>
           </>}
         </div>
         <span className={`stream-indicator ${streaming ? 'live' : 'off'}`}>
@@ -258,24 +342,17 @@ function App() {
           <table>
             <thead>
               <tr>
-                <th>Score</th>
-                <th>Graph</th>
-                <th>Type</th>
-                <th>Subtype</th>
-                <th>Name</th>
-                <th>Content</th>
-                <th>E</th>
-                <th>W</th>
-                <th>S</th>
-                <th>F</th>
-                <th>Status</th>
-                <th>Origin</th>
-                <th>Source</th>
-                <th>Updated</th>
+                {columns.map(col => (
+                  <th key={col.key} className={`sortable ${sortCol === col.key ? 'sorted' : ''}`}
+                    onClick={() => toggleSort(col.key)}>
+                    {col.label}
+                    {sortCol === col.key && <span className="sort-arrow">{sortDir === -1 ? ' ▼' : ' ▲'}</span>}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {nodeList.map((n, i) => (
+              {sortedNodes.map((n, i) => (
                 <tr key={i} className={`node-row type-${(n.label || '').toLowerCase()}`}>
                   <td className="col-score">{starScore(n)}</td>
                   <td className="col-graph">{n.graph}</td>
