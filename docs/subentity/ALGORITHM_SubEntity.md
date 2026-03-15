@@ -627,8 +627,8 @@ autonomy_levels:
   SUBCALL:  autonomous     # zero-LLM, graph-only — safe
   COMMIT:   autonomous     # commit after successful write + verify cycle
   PUSH:     guarded        # push to remote — check branch is not main
-  FORCE_PUSH: human_required # destructive — never without human
-  DELETE:   human_required # never delete without human approval
+  FORCE_PUSH: awake_required # destructive — never without human
+  DELETE:   awake_required # never delete without human approval
 ```
 
 **Guarded actions** execute only if:
@@ -649,7 +649,7 @@ on subentity_wants_to_act(subentity, action):
             execute(action)
         else:
             queue_for_wakeup(action)  # citizen will see it when they wake up
-    elif action.autonomy == 'human_required':
+    elif action.autonomy == 'awake_required':
         queue_for_human(action)       # appears in SYNC as pending decision
 ```
 
@@ -996,7 +996,7 @@ Every action a citizen can take at L2 — whether awake or asleep — falls into
 | Git commit | `bash: git commit` | autonomous | After successful WRITE + VERIFY | Moment created in L2, graph state in message |
 | Create PR | `bash: gh pr create` | guarded | After commit, when branch is ready | Public-facing, needs competence check |
 
-### NEVER (human_required)
+### NEVER (awake_required)
 
 | Action | Why |
 |--------|-----|
