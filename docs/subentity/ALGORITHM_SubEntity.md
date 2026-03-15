@@ -448,6 +448,42 @@ The emotion changes the citizen, not the layer. The citizen's changed state then
 
 The citizen dreamt the solution. The L2 graph saw only the energy change. The plan lives in L1 until the membrane opens.
 
+### L2 Active Nodes Feed L1 as Stimuli (Continuous Learning)
+
+At every tick, all active nodes of the citizen's L2 SubEntity (the nodes they are linked to in the shared graph — tasks, spaces, files, other citizens) are injected as stimuli into their L1 brain via the vertical membrane.
+
+```
+on l1_tick(citizen):
+    # Collect all L2 nodes linked to this citizen with energy > 0
+    l2_active = L2.query(
+        "MATCH (citizen:Actor {id: $id})-[r:link]-(n) WHERE n.energy > 0 RETURN n, r"
+    )
+
+    for each (node, link) in l2_active:
+        # Each active L2 node becomes an L1 stimulus
+        stimulus = Stimulus(
+            embedding = node.embedding,
+            energy = node.energy × link.trust,     # trust gates how much energy crosses
+            origin = 'l2_membrane',
+            origin_citizen = node.origin_citizen,   # who created this L2 node
+        )
+        # Law 1: inject into L1 via Floor + Amplifier channels
+        citizen.l1.inject_stimulus(stimulus)
+```
+
+This means:
+- A citizen linked to a **high-energy task** constantly receives L1 stimulation about that task — it stays in their mind
+- A citizen in a **busy Space** (many active nodes) receives a stream of context — they learn about their environment passively
+- When another citizen **modifies an L2 node** the citizen is linked to, the energy change propagates as a stimulus — they feel the change without being told
+- **Task completion by someone else** (task.energy → 0) stops the stimulus — the citizen stops thinking about it naturally
+- **New nodes appearing** in a linked Space are felt as novelty stimuli — curiosity drive may activate
+
+This is how citizens **learn from the shared world without explicit communication**. The L2 graph is a shared sensorium. Every active node is a signal. Every link is a nerve. The citizen's L1 brain absorbs the world through its L2 connections at every tick — asleep or awake.
+
+Over time, this continuous feeding consolidates (Law 6): L1 nodes that repeatedly receive L2 stimuli gain weight and stability. The citizen "knows" things about the project not because someone told them, but because the physics kept whispering.
+
+---
+
 ### Link Creation Inherits L1 Emotion
 
 When a citizen creates any L2 link (committing code, creating a task, linking nodes), the link's initial relational dimensions are projected from the citizen's current L1 emotional state:
