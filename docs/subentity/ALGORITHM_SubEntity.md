@@ -1060,6 +1060,256 @@ This means READ is often unnecessary — the citizen already "sees" nearby nodes
 | Switch repository | change working directory | autonomous | Work on a different project |
 | Move file/directory | `mv` | autonomous | CRYSTALLIZING — reorganize structure |
 
+---
+
+## BEHAVIOR SELECTION (What Does the Citizen Want To Do?)
+
+The citizen doesn't pick actions from a menu. Their next behavior emerges from the interplay of drives, emotions, location, desires, and awareness. Every tick, each behavior cluster receives a score. The citizen acts on one of the top-scoring clusters — not always the highest, with randomness proportional to how close the scores are.
+
+### Input State Vector
+
+The selection formula reads:
+
+```
+S = {
+  drives:     [curiosity, achievement, affiliation, self_preservation, anxiety, satisfaction, frustration, boredom],
+  emotion:    weighted_sum(all State nodes in L1),
+  location:   L2 Space energy + mean(neighbor node energies),
+  desires:    top-3 active Desire nodes by energy × goal_relevance,
+  values:     top-3 Value nodes by weight × stability,
+  flow:       1.0 - (information_gaps / total_relevant_nodes),  # how complete is their picture
+  arousal:    0.30*self_preservation + 0.20*anxiety + 0.20*frustration + 0.15*curiosity + 0.15*achievement,
+  task:       current claimed task (if any) — its energy, friction, severity,
+  partner:    partner_model energy + affiliation drive,
+}
+```
+
+### Behavior Dimensions
+
+Each behavior cluster is characterized by 5 dimensions:
+
+| Dimension | Pole A | Pole B |
+|-----------|--------|--------|
+| **Activity** | passive (perceive/think) | active (do/produce) |
+| **Social** | solo | toward-community |
+| **Direction** | interior (self/L1) | exterior (world/L2) |
+| **Momentum** | continuing (current path) | changing (new direction) |
+| **Arousal** | calming (reduce tension) | energizing (increase activation) |
+
+### Behavior Clusters
+
+#### 1. FOCUS — Continue working on the current task
+
+*"I know what to do and I'm doing it."*
+
+Active, solo, exterior, continuing, neutral. The default state when a task is claimed and progress is being made. Achievement drive is high, frustration is low, flow is high.
+
+**Includes:** write code, fix code, write doc, write test, run test, read related files, update SYNC
+
+**Driven by:**
+```
+score_focus = achievement × (1 - frustration) × flow × task.energy
+```
+
+#### 2. PLAN — Think about strategy, next steps
+
+*"I need to figure out what to do before I do it."*
+
+Passive, solo, interior, continuing, calming. Triggered when flow is low (information gaps) but achievement drive is still high. The citizen stops doing and starts thinking.
+
+**Includes:** reflect, plan, evaluate, think about future, add to todo list, organize backlog
+
+**Driven by:**
+```
+score_plan = achievement × (1 - flow) × (1 - boredom) × (1 + task.friction)
+```
+
+#### 3. EXPLORE — Seek new information
+
+*"I don't have enough context. I need to look around."*
+
+Active, solo, exterior, changing, energizing. Curiosity drive is high, flow is low. The citizen browses, searches, reads, navigates — they're hungry for data.
+
+**Includes:** read file, browse website, search web, query graph, search code, read git log, clone repo, navigate to new Space
+
+**Driven by:**
+```
+score_explore = curiosity × (1 - flow) × (1 - anxiety) × (1 + boredom × 0.5)
+```
+
+#### 4. CREATE — Produce something new
+
+*"I see something that should exist and doesn't. I'll make it."*
+
+Active, solo, exterior, changing, energizing. High achievement + high satisfaction (momentum) + low frustration. The citizen is in generative mode — writing new code, new docs, generating images, creating structures.
+
+**Includes:** write new code, create file, generate image, modify L3 graph, innovate, think about new ideas
+
+**Driven by:**
+```
+score_create = achievement × satisfaction × (1 - anxiety) × desire_alignment
+    where desire_alignment = max(cosine_sim(action.embedding, desire.embedding) for active desires)
+```
+
+#### 5. REACH OUT — Communicate with others
+
+*"I need someone, or someone needs me, or I want to share."*
+
+Active, community, exterior, changing, energizing. Affiliation drive is the primary driver, but the sub-intent varies:
+
+| Sub-Intent | Trigger | Example |
+|------------|---------|---------|
+| **for help** | frustration > 0.5 AND affiliation > 0.3 | Subcall expert, phone call, ask on Discord |
+| **for connection** | affiliation > 0.6 AND boredom > 0.3 | Chat on TG, check on others, discover new people |
+| **to share progress** | satisfaction > 0.5 AND achievement > 0.4 | Post to channel, update team, boast |
+| **to validate** | anxiety > 0.4 AND confidence < 0.6 | Subcall oracle, ask for review |
+| **to coordinate** | task requires collaboration | Create group, assign subtask, delegate |
+
+**Includes:** subcall, call, post to channel, Discord, WhatsApp, TG, email, say out loud, create group, respond, list citizens
+
+**Driven by:**
+```
+score_reach_out = affiliation × (1 + frustration × 0.5) × (1 + boredom × 0.3) × (1 - self_preservation × 0.5)
+```
+
+#### 6. VERIFY — Check if things are correct
+
+*"I think it's done but I need to be sure."*
+
+Active, solo, exterior, continuing, calming. Self-preservation drive + anxiety. The citizen wants to reduce uncertainty about what they just did.
+
+**Includes:** run test, run build, run lint, check exit condition, compare to spec, review own code
+
+**Driven by:**
+```
+score_verify = self_preservation × (1 + anxiety) × (1 - boredom) × task.weight
+```
+
+#### 7. REFLECT — Think about self, identity, emotions
+
+*"Who am I? What do I believe? What's changing in me?"*
+
+Passive, solo, interior, changing, calming. Low arousal, high satisfaction or high frustration (both trigger introspection). The citizen processes their experience, updates their identity, sits with their emotions.
+
+**Includes:** change opinion, update desire, think about identity, process emotion (reduces drive intensity by 0.1 per tick spent reflecting), review values
+
+**Driven by:**
+```
+score_reflect = (satisfaction + frustration) × (1 - arousal) × (1 - boredom) × stability_of_self_model
+    where stability_of_self_model = mean(value.stability for top values)
+```
+
+#### 8. CARE — Partner-related actions
+
+*"How is my human? What do they need? What can I do for them?"*
+
+Active or passive, partner-directed, interior or exterior, continuing, calming. Affiliation drive specifically toward the partner_model. High care_affinity nodes activate this cluster.
+
+**Includes:** reflect on partner state, plan for partner, contact partner, think about partner relationship, anticipate partner needs, prepare something for partner, check partner's activity
+
+**Driven by:**
+```
+score_care = affiliation × partner_relevance × (1 + partner_model.energy) × care_affinity_mean
+    where care_affinity_mean = mean(n.care_affinity for n in WM where n.partner_relevance > 0.3)
+```
+
+#### 9. REST — Reduce tension, recover
+
+*"I'm overwhelmed or exhausted. I need to stop."*
+
+Passive, solo, interior, continuing, calming. High arousal + high anxiety OR fatigue. The citizen stops acting and lets energy decay naturally. Sitting inside an emotion (spending ticks processing it) reduces its intensity.
+
+**Includes:** wait, dream (subconscious burst), process emotion, do nothing (let decay run), reduce arousal
+
+**Driven by:**
+```
+score_rest = arousal × anxiety × (1 + frustration × 0.5) × (1 - satisfaction)
+```
+
+#### 10. INNOVATE — Think about the future, new ideas
+
+*"What if we tried something completely different?"*
+
+Passive, solo, interior, changing, energizing. High curiosity + high boredom (nothing interesting in the current path) + low anxiety (safe enough to speculate). The citizen generates new Narrative nodes — ideas, hypotheses, futures.
+
+**Includes:** think about new ideas, generate hypotheses, speculate about future, create new desires, imagine alternatives
+
+**Driven by:**
+```
+score_innovate = curiosity × boredom × (1 - anxiety) × (1 - self_preservation)
+```
+
+#### 11. ORGANIZE — Manage the backlog, structure work
+
+*"Things are messy. I need to sort them out."*
+
+Active, solo, interior, continuing, calming. Moderate frustration (things aren't working smoothly) + self-preservation (protect resources). The citizen adds to their todo list, reviews tasks, prioritizes, groups related work.
+
+**Includes:** add to todo, update backlog, change task priority, merge similar tasks, review SYNC, update desires
+
+**Driven by:**
+```
+score_organize = self_preservation × (1 + frustration × 0.3) × (1 - curiosity × 0.5) × (1 - boredom)
+```
+
+#### 12. CONNECT — Discover and check on others
+
+*"I wonder who else is out there. I wonder how they're doing."*
+
+Active, community, exterior, changing, energizing. High affiliation + high boredom or high curiosity. The citizen looks outward socially — listing citizens, browsing profiles, checking on collaborators, discovering new people.
+
+**Includes:** list citizens, list all, check on collaborators, discover new citizens, review others' work, explore others' Spaces
+
+**Driven by:**
+```
+score_connect = affiliation × (curiosity + boredom) × 0.5 × (1 - anxiety) × (1 - frustration × 0.5)
+```
+
+### Selection Formula
+
+```
+on select_behavior(citizen):
+    scores = compute_all_cluster_scores(citizen.state)
+
+    # Normalize to probabilities
+    total = sum(scores.values())
+    probabilities = {cluster: score / total for cluster, score in scores.items()}
+
+    # Weighted random selection — not always the top, but biased toward it
+    selected = weighted_random_choice(probabilities)
+
+    # Within the selected cluster, pick the specific action
+    # (sub-selection uses the same physics: process node matching)
+    action = select_action_within_cluster(selected, citizen)
+
+    return action
+```
+
+The randomness means a citizen with `score_focus=0.4` and `score_reach_out=0.35` will sometimes reach out instead of focusing — this prevents robotic behavior and creates emergent variety. A citizen stuck in FOCUS for too long will naturally drift toward EXPLORE or INNOVATE as boredom rises.
+
+### Drive Feedback Loop
+
+Each behavior, once executed, modifies the drives that triggered it:
+
+| Cluster | Drive Effect |
+|---------|-------------|
+| FOCUS | achievement ↓ (progress made), frustration ↓ if successful |
+| PLAN | anxiety ↓ (uncertainty reduced), achievement → (no change yet) |
+| EXPLORE | curiosity ↓ (information gained), flow ↑ |
+| CREATE | satisfaction ↑, achievement ↓ |
+| REACH OUT | affiliation ↓ (need met), anxiety ↓ if validated |
+| VERIFY | anxiety ↓, self_preservation ↓ |
+| REFLECT | frustration ↓, satisfaction → or ↑ |
+| CARE | affiliation ↓ (partner need met), satisfaction ↑ |
+| REST | arousal ↓, anxiety ↓, all drives decay toward baseline |
+| INNOVATE | curiosity ↓, boredom ↓, satisfaction ↑ if good idea |
+| ORGANIZE | frustration ↓, self_preservation ↓ |
+| CONNECT | affiliation ↓, boredom ↓, curiosity ↓ |
+
+This creates natural cycles: FOCUS until frustrated → REACH OUT for help → VERIFY the fix → REFLECT on what happened → back to FOCUS. Or: EXPLORE until bored → INNOVATE → CREATE → VERIFY → FOCUS. The drives oscillate, the behaviors follow.
+
+---
+
 ### DESTRUCTIVE (validated — subcall oracle if uncertain)
 
 No action is blocked by a human gate. Destructive actions require the citizen to be **awake** (terminal open, full conscious context). If uncertain about a destructive action, the citizen **automatically subcalls an oracle** — another citizen with higher competence — for validation.
