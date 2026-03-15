@@ -157,22 +157,57 @@ body { background: #0a0a0a; color: #eee; font-family: system-ui, sans-serif; ove
 }
 .brain-handle { color: #a78bfa; font-weight: bold; font-size: 14px; }
 .brain-stats { color: #888; font-size: 11px; }
-.brain-types { margin-left: auto; display: flex; gap: 4px; }
+.brain-place { color: #3b82f6; font-size: 10px; background: #3b82f611; padding: 1px 6px; border-radius: 3px; }
+.brain-task { color: #fbbf24; font-size: 10px; background: #fbbf2411; padding: 1px 6px; border-radius: 3px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.brain-types { margin-left: auto; display: flex; gap: 4px; flex-shrink: 0; }
 .brain-nodes { padding: 4px 0; }
 .brain-node {
-  display: flex; align-items: center; gap: 8px; padding: 3px 12px;
+  display: flex; align-items: flex-start; gap: 8px; padding: 5px 12px;
   font-size: 11px; position: relative; overflow: hidden;
 }
 .brain-node:hover { background: #1a1a2a; }
 .brain-node-energy {
   position: absolute; left: 0; top: 0; bottom: 0;
-  background: linear-gradient(90deg, #3b82f622, transparent);
+  background: linear-gradient(90deg, #3b82f611, transparent);
   pointer-events: none;
 }
-.brain-node-type { color: #888; font-size: 10px; min-width: 60px; z-index: 1; }
-.brain-node-name { color: #ddd; z-index: 1; min-width: 200px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brain-node-content { color: #666; z-index: 1; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.brain-node-e { color: #4ade80; font-family: monospace; font-size: 10px; z-index: 1; white-space: nowrap; }
+.brain-node-circle {
+  border-radius: 50%; border: 2px solid #444; flex-shrink: 0; z-index: 1;
+}
+.brain-node-type {
+  font-size: 9px; min-width: 60px; z-index: 1; text-transform: lowercase;
+  padding: 1px 5px; border-radius: 3px; font-weight: bold; text-align: center;
+  flex-shrink: 0;
+}
+.ntype-memory { background: #ef444433; color: #f87171; }
+.ntype-concept { background: #10b98133; color: #34d399; }
+.ntype-narrative { background: #8b5cf633; color: #a78bfa; }
+.ntype-value { background: #f59e0b33; color: #fbbf24; }
+.ntype-process { background: #3b82f633; color: #60a5fa; }
+.ntype-desire { background: #ec489933; color: #f472b6; }
+.ntype-state { background: #06b6d433; color: #22d3ee; }
+.ntype-actor { background: #f59e0b33; color: #fbbf24; }
+.ntype-moment { background: #ef444433; color: #f87171; }
+.ntype-space { background: #3b82f633; color: #60a5fa; }
+.ntype-thing { background: #10b98133; color: #34d399; }
+.ntype-node { background: #55555533; color: #aaa; }
+.brain-node-name { color: #ccc; z-index: 1; flex: 1; font-size: 11px; line-height: 1.3; }
+.brain-node-tags { display: flex; gap: 3px; z-index: 1; flex-shrink: 0; flex-wrap: wrap; }
+.tag {
+  font-size: 8px; padding: 0 4px; border-radius: 2px; font-weight: bold;
+  text-transform: uppercase; letter-spacing: 0.3px;
+}
+.tag-self { background: #7c3aed33; color: #a78bfa; }
+.tag-partner { background: #ec489933; color: #f472b6; }
+.tag-goal { background: #f59e0b33; color: #fbbf24; }
+.tag-care { background: #f4385e33; color: #fb7185; }
+.tag-achieve { background: #10b98133; color: #34d399; }
+.tag-novelty { background: #06b6d433; color: #22d3ee; }
+.tag-risk { background: #ef444433; color: #f87171; }
+.brain-node-meta { display: flex; gap: 6px; z-index: 1; flex-shrink: 0; align-items: center; margin-left: auto; }
+.meta-e { color: #4ade80; font-family: monospace; font-size: 10px; }
+.meta-act { color: #fbbf24; font-size: 9px; }
+.meta-time { color: #888; font-size: 9px; }
 
 svg { flex: 1; cursor: grab; }
 svg:active { cursor: grabbing; }

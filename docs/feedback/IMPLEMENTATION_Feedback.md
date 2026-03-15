@@ -1,8 +1,9 @@
 # Live Feedback — Implementation: Code Architecture and Structure
 
 ```
-STATUS: PROPOSED
+STATUS: PARTIAL — 4 endpoints LIVE, salience/place/blood-ledger PROPOSED
 CREATED: 2026-03-15
+UPDATED: 2026-03-15
 ```
 
 ---
@@ -20,7 +21,10 @@ THIS:            IMPLEMENTATION_Feedback.md
 HEALTH:          ./HEALTH_Feedback.md
 SYNC:            ./SYNC_Feedback.md
 
-IMPL:            src/server/place-server.js
+IMPL:            server.js
+IMPL:            src/server/sse-stream.js
+IMPL:            src/server/l2-tick.js
+IMPL:            src/server/citizen-state.js
 ```
 
 > **Contract:** Read docs before modifying. After changes: update IMPL or add TODO to SYNC. Run tests.
@@ -30,32 +34,37 @@ IMPL:            src/server/place-server.js
 ## CODE STRUCTURE
 
 ```
-src/
-├── server/
-│   ├── place-server.js          # Place node management, room state, energy injection
-│   ├── sse-stream.js            # SSE endpoint, connection management, event buffering
-│   ├── salience.js              # Salience calculation (weight × energy × focus)
-│   └── index.js                 # Server entry point — mounts SSE endpoint
-├── shared/
-│   └── blood-ledger/
-│       └── renderer.js          # Blood Ledger rendering cartridge — graph state → visual transforms
+./
+├── server.js                      # API entry point — all 4 DevBoard endpoints
+├── src/
+│   ├── App.jsx                    # Frontend — SSE consumer, tick controls, query UI
+│   ├── server/
+│   │   ├── l2-tick.js             # L2 tick cycle (19-step collective heartbeat)
+│   │   ├── sse-stream.js          # SSE helpers (skeleton — actual SSE is inline in server.js)
+│   │   ├── citizen-state.js       # Citizen state retrieval for query/tick cycles
+│   │   ├── behavior-scorer.js     # Behavior scoring for L2 tick
+│   │   ├── target-selector.js     # Target selection with Cypher queries
+│   │   ├── sentence-maker.js      # Sentence generation for citizen actions
+│   │   ├── task-continuity.js     # Task resolution for citizen behavior cycle
+│   │   └── action-dispatch.js     # Action dispatch (graph_query support)
 ```
 
 ### File Responsibilities
 
 | File | Purpose | Key Functions/Classes | Lines | Status |
 |------|---------|----------------------|-------|--------|
-| `src/server/place-server.js` | Place node lifecycle, active room tracking, energy injection per tick | `PlaceServer`, `injectEnergy()`, `setActivePlace()` | ~0 | PROPOSED |
-| `src/server/sse-stream.js` | SSE endpoint handler, connection registry, event buffer, reconnection replay | `createSSEStream()`, `emitDelta()`, `replayFromId()` | ~0 | PROPOSED |
-| `src/server/salience.js` | Salience formula, visibility threshold, focus computation | `computeSalience()`, `filterByThreshold()`, `computeFocus()` | ~0 | PROPOSED |
-| `src/shared/blood-ledger/renderer.js` | Transforms salience entries into VisualTransform objects for client rendering | `renderTransform()`, `frictionToAlert()`, `energyToVisual()` | ~0 | PROPOSED |
+| `server.js` | Express server — mounts all 4 API endpoints, inline SSE stream + tick logic | `sseEmit()`, `parseGraphResult()`, route handlers | ~330 | LIVE |
+| `src/server/l2-tick.js` | Full L2 tick cycle — propagation, decay, citizen behavior selection | `runL2Tick()` | ~169 | LIVE |
+| `src/server/sse-stream.js` | SSE helper stubs (not yet wired — actual SSE logic is inline in server.js) | `createSSEStream()`, `emitDelta()`, `replayFromId()` | ~31 | SKELETON |
+| `src/server/citizen-state.js` | Read citizen state from FalkorDB for behavior scoring | `getCitizenState()` | — | LIVE |
+| `src/App.jsx` | Frontend consumer — connects to SSE, triggers tick/query endpoints | `App`, `runTick()`, `runQuery()` | ~304 | LIVE |
 
 **Size Thresholds:**
 - **OK** (<400 lines): Healthy size, easy to understand
 - **WATCH** (400-700 lines): Getting large, consider extraction opportunities
 - **SPLIT** (>700 lines): Too large, must split before adding more code
 
-> All files are PROPOSED — no code exists yet. Size will be tracked once implementation begins.
+> `server.js` and `l2-tick.js` are LIVE. `sse-stream.js` is a skeleton stub. `salience.js`, `place-server.js`, and `blood-ledger/renderer.js` are still PROPOSED.
 
 ---
 
@@ -145,13 +154,24 @@ VisualTransform:
 
 ---
 
-## ENTRY POINTS
+## ENTRY POINTS — The 4 DevBoard API Endpoints
 
-| Entry Point | File:Line | Triggered By |
-|-------------|-----------|--------------|
-| SSE stream connection | `src/server/sse-stream.js:createSSEStream()` | Client HTTP GET to `/api/stream/{playthrough_id}` |
-| Tick delta processing | `src/server/place-server.js:onTickComplete()` | Physics engine `tick_complete` event |
-| Room navigation | `src/server/place-server.js:setActivePlace()` | Client navigation action via REST |
+| Endpoint | Method | File:Line | Triggered By | Purpose |
+|----------|--------|-----------|--------------|---------|
+| `/api/stream/:graph` | GET | `server.js:28` | Client `EventSource` connection (App.jsx:55) | SSE stream — pushes tick deltas to connected clients in real time |
+| `/api/query` | POST | `server.js:58` | Client query input (App.jsx:140) | Runs a Cypher query against FalkorDB, returns nodes + links |
+| `/api/tick` | POST | `server.js:79` | Client tick button/interval (App.jsx:88) | L1 physics tick — decay + propagation, emits delta via SSE |
+| `/api/l2tick` | POST | `server.js:245` | Client L2 toggle + tick (App.jsx:88) | L2 tick — full 19-step cycle with citizen behavior selection |
+
+### Supporting Endpoints (not core feedback loop but used by DevBoard)
+
+| Endpoint | Method | File:Line | Purpose |
+|----------|--------|-----------|---------|
+| `/api/graphs` | GET | `server.js:50` | List available FalkorDB graphs |
+| `/api/nodes/:graph` | GET | `server.js:153` | Raw node listing with time filter |
+| `/api/citizens/:graph` | GET | `server.js:177` | Citizen state + top behavior scores |
+| `/api/monitor/:graph` | GET | `server.js:214` | Dashboard: last tick + node/link/task counts |
+| `/api/trace/:graph` | GET | `server.js:239` | Last N tick traces for debugging |
 
 ---
 
@@ -168,45 +188,45 @@ flow:
   scope: physics tick output → SSE → client render
   steps:
     - id: step_1
-      description: Physics tick completes, emits tick_complete with changed node set
-      file: src/server/index.js
-      function: physics_tick_handler
-      input: graph_state
-      output: tick_complete event with changed_nodes[]
-      trigger: physics tick interval
-      side_effects: energy propagated, decay applied
+      description: "Client triggers tick via POST /api/tick or /api/l2tick"
+      file: server.js
+      function: "route handler at line 79 (L1) or line 245 (L2)"
+      input: "{ graph: string }"
+      output: tick result with decay/propagation counts
+      trigger: "Client fetch (App.jsx:88) — manual button or interval timer"
+      side_effects: energy decayed, energy propagated via FalkorDB Cypher
     - id: step_2
-      description: Place server receives tick_complete, injects energy into active Place
-      file: src/server/place-server.js
-      function: onTickComplete()
-      input: tick_complete event, active_places map
-      output: updated Place nodes with injected energy
-      trigger: tick_complete event
-      side_effects: active Place energy increased
+      description: "L1 tick: decay + propagation inline. L2 tick: delegates to runL2Tick()"
+      file: "server.js (L1) / src/server/l2-tick.js (L2)"
+      function: "inline Cypher (L1:97-111) / runL2Tick() (L2:16)"
+      input: redis client, graph name
+      output: "{ decayed, propagated, citizens[] (L2 only) }"
+      trigger: step_1 route handler
+      side_effects: "node energy mutated in FalkorDB, citizen behaviors dispatched (L2)"
     - id: step_3
-      description: Salience computed for all changed nodes visible from active Place
+      description: "[PROPOSED] Salience computed for changed nodes — NOT YET IMPLEMENTED"
       file: src/server/salience.js
-      function: computeSalience()
+      function: "computeSalience() — SKELETON"
       input: changed_nodes[], active_place_uri
       output: SalienceEntry[] with visibility flags
-      trigger: called by place-server after energy injection
+      trigger: "(future) called after energy mutation"
       side_effects: none (pure computation)
     - id: step_4
-      description: Blood Ledger transforms salience entries into visual instructions
+      description: "[PROPOSED] Blood Ledger renders visual transforms — NOT YET IMPLEMENTED"
       file: src/shared/blood-ledger/renderer.js
-      function: renderTransform()
+      function: "renderTransform() — NOT CREATED"
       input: SalienceEntry[]
       output: VisualTransform[]
-      trigger: called by place-server after salience filtering
+      trigger: "(future) called after salience filtering"
       side_effects: none (pure computation)
     - id: step_5
-      description: SSE stream emits delta event to all connected clients
-      file: src/server/sse-stream.js
-      function: emitDelta()
-      input: VisualTransform[], playthrough_id
-      output: SSE event written to client connections
-      trigger: called by place-server after rendering
-      side_effects: event buffer updated, bytes written to HTTP connections
+      description: SSE emits tick event with full graph state to connected clients
+      file: server.js
+      function: "sseEmit() at line 18, called from tick handler at line 134 (L1) / line 261 (L2)"
+      input: "graph name, 'tick' event, { nodes, links, deltas }"
+      output: SSE event written to all connected Response objects
+      trigger: called inline after tick completes (if SSE clients connected)
+      side_effects: "eventCounter incremented, bytes written to HTTP connections"
   docking_points:
     guidance:
       include_when: significant state transformation, boundary crossing, risk of desynchronization
@@ -214,45 +234,55 @@ flow:
       selection_notes: Focus on points where graph state crosses into visual domain and where SSE emission occurs — these are the desync risk points
     available:
       - id: dock_tick_input
-        type: event
+        type: api
         direction: input
-        file: src/server/place-server.js
-        function: onTickComplete()
-        trigger: tick_complete event
-        payload: "{ changed_nodes: NodeRef[], tick_number: int }"
+        file: server.js
+        function: "POST /api/tick (line 79) and POST /api/l2tick (line 245)"
+        trigger: "Client fetch from App.jsx:88"
+        payload: "{ graph: string }"
         async_hook: not_applicable
-        needs: add event listener
-        notes: Entry point — if this dock fails, no feedback occurs
+        needs: none
+        notes: "Entry point — if these endpoints fail, no feedback occurs. L1 tick is inline; L2 delegates to runL2Tick()"
+      - id: dock_query_input
+        type: api
+        direction: input
+        file: server.js
+        function: "POST /api/query (line 58)"
+        trigger: "Client fetch from App.jsx:140"
+        payload: "{ graph: string, query: string }"
+        async_hook: not_applicable
+        needs: none
+        notes: "Runs raw Cypher via GRAPH.QUERY — returns parsed nodes + links via parseGraphResult()"
       - id: dock_salience_output
         type: custom
         direction: output
         file: src/server/salience.js
-        function: computeSalience()
-        trigger: called per tick
+        function: "computeSalience() — SKELETON, not yet wired"
+        trigger: "(future) called per tick"
         payload: "SalienceEntry[]"
         async_hook: not_applicable
-        needs: none
-        notes: Pure function — custom type because it is an internal computation boundary, not a standard IO type
+        needs: "implement and wire into server.js tick handlers"
+        notes: "Pure function — not yet integrated. Currently salience filtering is absent: all nodes are emitted."
       - id: dock_sse_emission
         type: stream
         direction: output
-        file: src/server/sse-stream.js
-        function: emitDelta()
-        trigger: called per tick after rendering
-        payload: "SSEEvent { id, event, data: VisualTransform[] }"
-        async_hook: optional
+        file: server.js
+        function: "sseEmit() at line 18"
+        trigger: "called from tick handler lines 134 (L1) and 261 (L2)"
+        payload: "SSEEvent { id, event: 'tick', data: { nodes, links, deltas, decayed, propagated } }"
+        async_hook: not_applicable
         needs: none
-        notes: Critical desync risk point — if emission fails, display diverges from graph
+        notes: "Critical desync risk point — emits full graph state (not just deltas). If emission fails, try/catch falls back to tick result only."
       - id: dock_sse_connection
         type: api
         direction: input
-        file: src/server/sse-stream.js
-        function: createSSEStream()
-        trigger: "HTTP GET /api/stream/{playthrough_id}"
-        payload: "{ playthrough_id: string, last_event_id?: string }"
+        file: server.js
+        function: "GET /api/stream/:graph (line 28)"
+        trigger: "Client EventSource from App.jsx:55"
+        payload: "{ graph: string (URL param) }"
         async_hook: not_applicable
         needs: none
-        notes: Client entry point — must support reconnection via Last-Event-ID
+        notes: "SSE endpoint — 15s heartbeat, connection tracked in sseClients Map. No Last-Event-ID replay yet."
     health_recommended:
       - dock_id: dock_tick_input
         reason: If tick events stop arriving, the entire feedback pipeline is dead
@@ -307,24 +337,28 @@ user navigates to place://ui/manager
 ### Internal Dependencies
 
 ```
-place-server.js
-    └── imports → salience.js
-    └── imports → sse-stream.js
-    └── imports → blood-ledger/renderer.js
-sse-stream.js
-    └── imports → (no internal deps)
-salience.js
-    └── imports → (no internal deps)
-blood-ledger/renderer.js
-    └── imports → (no internal deps)
+server.js (entry point — all 4 API endpoints)
+    └── imports → src/server/l2-tick.js         (runL2Tick for /api/l2tick)
+    └── imports → src/server/citizen-state.js   (getCitizenState for /api/citizens)
+    └── imports → src/server/behavior-scorer.js (scoreBehaviors for /api/citizens)
+src/server/l2-tick.js
+    └── imports → citizen-state.js
+    └── imports → behavior-scorer.js
+    └── imports → target-selector.js
+    └── imports → sentence-maker.js
+    └── imports → task-continuity.js
+    └── imports → action-dispatch.js
+src/server/sse-stream.js
+    └── imports → (no internal deps — skeleton, not wired)
 ```
 
 ### External Dependencies
 
 | Package | Used For | Imported By |
 |---------|----------|-------------|
-| `express` | HTTP server, SSE endpoint routing | `src/server/index.js` |
-| Graph engine (FalkorDB / in-memory) | Node/edge queries, shortest path | `src/server/place-server.js` |
+| `express` | HTTP server, all API endpoint routing | `server.js` |
+| `redis` (createClient) | FalkorDB connection via GRAPH.QUERY | `server.js` |
+| `d3` | Force-directed graph visualization | `src/App.jsx` |
 
 ---
 
@@ -334,10 +368,12 @@ blood-ledger/renderer.js
 
 | State | Location | Scope | Lifecycle |
 |-------|----------|-------|-----------|
-| Active Places map | `place-server.js:activePlaces` | module | Created on first navigation, updated on room change, destroyed on playthrough end |
-| SSE connection registry | `sse-stream.js:streams` | module | Created on client connect, destroyed on disconnect |
-| Event replay buffer | `sse-stream.js:eventBuffer` | module | Grows with events, evicted when buffer cap reached |
-| Place node energy/focus | Graph (FalkorDB / in-memory) | global | Lives in graph, updated each tick |
+| SSE connection registry | `server.js:15` (`sseClients: Map<graph, Set<Response>>`) | process | Created on `GET /api/stream`, cleaned up on `req.close` |
+| SSE event counter | `server.js:16` (`eventCounter`) | process | Monotonically increments per emitted event |
+| Last tick result | `server.js:209` (`lastTickResult`) | process | Overwritten each L2 tick, exposed via `/api/monitor` |
+| Tick history buffer | `server.js:210` (`tickHistory[]`) | process | Last 100 ticks, FIFO eviction |
+| Node energy/weight/stability | FalkorDB graph | global | Mutated each tick via Cypher SET |
+| Active Places map | NOT YET IMPLEMENTED (proposed: `place-server.js`) | — | PROPOSED |
 
 ### State Transitions
 
@@ -356,28 +392,38 @@ SSEConnection(none) ──GET /api/stream──▶ SSEConnection(connected) ─�
 ### Initialization
 
 ```
-1. Server starts, mounts GET /api/stream/:playthrough_id endpoint
-2. Place server initializes active places map (empty)
-3. SSE stream manager initializes connection registry and event buffer
-4. Place server subscribes to tick_complete events from physics engine
+1. server.js connects to Redis/FalkorDB (line 10-11)
+2. Express app mounts all API endpoints
+3. GET /api/stream/:graph ready to accept SSE connections (line 28)
+4. POST /api/tick and /api/l2tick ready to accept tick triggers (lines 79, 245)
+5. Server listens on API_PORT (default 3001, line 329)
 ```
 
 ### Main Loop / Request Cycle
 
 ```
-1. Physics tick completes → tick_complete event emitted
-2. Place server injects energy into active Place
-3. Salience computed for changed nodes
-4. Blood Ledger generates visual transforms
-5. SSE stream emits delta event to connected clients
+L1 tick (/api/tick):
+  1. Snapshot energy before tick (best-effort)
+  2. Decay energy: SET n.energy = n.energy * 0.98 (line 97)
+  3. Propagate energy: surplus flows through weighted links (line 102)
+  4. Recency decay (line 110)
+  5. If SSE clients connected: query full graph → sseEmit('tick', {nodes, links, deltas})
+
+L2 tick (/api/l2tick):
+  1. Delegates to runL2Tick(redis, graph) in l2-tick.js
+  2. Steps 1-4: same propagation + decay
+  3. Steps 5-12: reinforcement, consolidation, task scan/verify (deferred)
+  4. Steps 13-17: per-citizen behavior cycle (score → select → target → sentence → dispatch)
+  5. Steps 18-19: SSE emission + sync (deferred)
+  6. If SSE clients connected: query full graph → sseEmit('tick', result)
 ```
 
 ### Shutdown
 
 ```
-1. Close all SSE connections with retry: header
-2. Unsubscribe from tick_complete events
-3. Flush event buffer
+1. SSE connections auto-close when server process exits
+2. Heartbeat intervals cleared on client disconnect (line 43-46)
+3. No explicit flush — event buffer is in-memory only
 ```
 
 ---
@@ -386,9 +432,10 @@ SSEConnection(none) ──GET /api/stream──▶ SSEConnection(connected) ─�
 
 | Component | Model | Notes |
 |-----------|-------|-------|
-| SSE stream | async (Node.js event loop) | Non-blocking writes to multiple connections per tick |
-| Salience calculation | sync | Pure computation, runs within tick handler |
-| Energy injection | sync | Graph mutation within tick handler — must complete before salience |
+| SSE stream (`sseEmit`) | sync write to all `Set<Response>` | Non-blocking but iterates all clients synchronously per emit |
+| Tick handlers (`/api/tick`, `/api/l2tick`) | async (await Redis) | Sequential Cypher queries: snapshot → decay → propagate → query full graph → SSE emit |
+| L2 citizen cycle | async serial per citizen | `for (citizenId of citizenIds)` — sequential, not parallel. Bottleneck with many citizens. |
+| SSE connection lifecycle | async (event-driven) | `req.on('close')` cleans up. Heartbeat via `setInterval`. |
 
 ---
 
@@ -396,10 +443,14 @@ SSEConnection(none) ──GET /api/stream──▶ SSEConnection(connected) ─�
 
 | Config | Location | Default | Description |
 |--------|----------|---------|-------------|
-| `VISIBILITY_THRESHOLD` | `src/server/salience.js` | `0.01` | Minimum salience for a node to be visible |
-| `INJECTION_AMOUNT` | `src/server/place-server.js` | `0.1` | Energy injected into active Place per tick |
-| `EVENT_BUFFER_SIZE` | `src/server/sse-stream.js` | `1000` | Maximum events retained for reconnection replay |
-| `HEARTBEAT_INTERVAL_MS` | `src/server/sse-stream.js` | `15000` | Interval between SSE heartbeat events to keep connection alive |
+| `DECAY_RATE` | `server.js:84` (L1), `src/server/l2-tick.js:14` (L2) | `0.02` | Energy decay coefficient per tick |
+| `FALKORDB_HOST` | `server.js:10` (env) | `localhost` | Redis/FalkorDB host |
+| `FALKORDB_PORT` | `server.js:10` (env) | `6379` | Redis/FalkorDB port |
+| `API_PORT` | `server.js:328` (env) | `3001` | Server listen port |
+| Heartbeat interval | `server.js:41` (hardcoded) | `15000` | SSE heartbeat keep-alive interval (ms) |
+| Propagation threshold | `server.js:103` (hardcoded) | `0.3` | Minimum energy for a node to propagate surplus |
+| `MAX_HISTORY` | `server.js:211` | `100` | Max tick traces retained for `/api/trace` |
+| `VISIBILITY_THRESHOLD` | `src/server/salience.js` (PROPOSED) | `0.01` | Minimum salience for visibility — NOT YET IMPLEMENTED |
 
 ---
 
@@ -411,24 +462,31 @@ Files that reference this documentation:
 
 | File | Line | Reference |
 |------|------|-----------|
-| (none yet — files are PROPOSED) | — | — |
+| `src/server/sse-stream.js` | 8 | `@see docs/feedback/IMPLEMENTATION_Feedback.md` |
 
 ### Docs → Code
 
-| Doc Section | Implemented In |
-|-------------|----------------|
-| ALGORITHM: SSE Stream Pipeline | `src/server/sse-stream.js:createSSEStream()` |
-| ALGORITHM: Salience Calculation | `src/server/salience.js:computeSalience()` |
-| ALGORITHM: Room Energy Injection | `src/server/place-server.js:injectEnergy()` |
-| BEHAVIOR B1 | `src/server/place-server.js:onTickComplete()` |
-| BEHAVIOR B2 | `src/server/place-server.js:setActivePlace()` |
-| VALIDATION V1 | (no test yet) |
+| Doc Section | Implemented In | Status |
+|-------------|----------------|--------|
+| ALGORITHM: SSE Stream Pipeline | `server.js:28` (`/api/stream/:graph`) — inline SSE with `sseEmit()` at line 18 | LIVE (inline, not extracted to sse-stream.js) |
+| ALGORITHM: Energy Decay + Propagation | `server.js:79` (`/api/tick`) — decay at line 97, propagation at line 102 | LIVE |
+| ALGORITHM: L2 Tick Cycle (19 steps) | `src/server/l2-tick.js:16` (`runL2Tick()`) — called by `/api/l2tick` | LIVE |
+| ALGORITHM: Salience Calculation | `src/server/salience.js` — NOT YET IMPLEMENTED | PROPOSED |
+| ALGORITHM: Room Energy Injection | `src/server/place-server.js` — NOT YET IMPLEMENTED | PROPOSED |
+| BEHAVIOR B1 (linter → spatial alert) | Partial: tick propagates friction, SSE emits deltas. Missing: salience filter, Blood Ledger transform | PARTIAL |
+| BEHAVIOR B2 (room navigation) | NOT YET IMPLEMENTED — no PlaceServer, no setActivePlace() | PROPOSED |
+| VALIDATION V1 (display sync) | `server.js:116-143` — SSE emits full graph after tick for connected clients | PARTIAL |
+| VALIDATION V1 | (no invariant test yet) | PROPOSED |
 
 ---
 
 ## EXTRACTION CANDIDATES
 
-No extraction candidates — all files are PROPOSED and not yet written.
+| Candidate | From | Lines | Trigger |
+|-----------|------|-------|---------|
+| SSE logic (sseClients, sseEmit, /api/stream handler) | `server.js:13-47` | ~35 | Extract to `src/server/sse-stream.js` when adding Last-Event-ID replay |
+| L1 tick handler (decay, propagation, delta detection) | `server.js:79-150` | ~72 | Extract to `src/server/tick.js` when adding salience pipeline |
+| `parseGraphResult()` | `server.js:273-326` | ~54 | Shared utility — used by tick, query, and l2tick handlers |
 
 ---
 
@@ -436,9 +494,14 @@ No extraction candidates — all files are PROPOSED and not yet written.
 
 > See PRINCIPLES.md "Feedback Loop" section for marker format and usage.
 
-<!-- @mind:todo Create place-server.js with PlaceServer class -->
-<!-- @mind:todo Create sse-stream.js with SSE endpoint and connection management -->
-<!-- @mind:todo Create salience.js with canonical salience formula -->
+<!-- @mind:done SSE stream endpoint live at server.js:28 (GET /api/stream/:graph) -->
+<!-- @mind:done Query endpoint live at server.js:58 (POST /api/query) -->
+<!-- @mind:done L1 tick endpoint live at server.js:79 (POST /api/tick) -->
+<!-- @mind:done L2 tick endpoint live at server.js:245 (POST /api/l2tick) -->
+<!-- @mind:todo Extract inline SSE logic from server.js into src/server/sse-stream.js (currently skeleton) -->
+<!-- @mind:todo Create place-server.js with PlaceServer class — active room tracking + energy injection -->
+<!-- @mind:todo Implement salience.js with canonical salience formula (Weight × Energy × Focus) -->
 <!-- @mind:todo Create blood-ledger/renderer.js with visual transform generation -->
+<!-- @mind:todo Add Last-Event-ID reconnection replay to SSE endpoint (server.js:28) -->
 <!-- @mind:proposition Consider shared salience constants module to prevent formula drift (V3) -->
-<!-- @mind:escalation Blood Ledger renderer interface needs definition — what methods does it expose? -->
+<!-- @mind:escalation server.js is growing (~330 lines) — WATCH threshold. Extract tick handlers when salience is added. -->

@@ -468,6 +468,8 @@ function App() {
               <div className="brain-header">
                 <span className="brain-handle">@{b.handle}</span>
                 <span className="brain-stats">{b.activeNodes} active / {b.totalNodes} total</span>
+                {b.place && <span className="brain-place" title="Current location">{b.place}</span>}
+                {b.task && <span className="brain-task" title={b.task.name}>{b.task.status === 'running' ? '>' : '~'} {b.task.name?.slice(0, 50)}</span>}
                 <span className="brain-types">
                   {b.types.map(t => <span key={t.type} className="type-badge" style={{ background: COLORS[t.type] || '#666', marginRight: 4 }}>{t.type} {t.count}</span>)}
                 </span>
@@ -475,11 +477,29 @@ function App() {
               <div className="brain-nodes">
                 {b.nodes.map((n, i) => (
                   <div key={i} className="brain-node">
-                    <span className="brain-node-energy" style={{ width: `${Math.min(n.energy * 100, 100)}%` }} />
-                    <span className="brain-node-type" style={{ color: COLORS[n.type] || '#888' }}>{n.subtype || n.type}</span>
-                    <span className="brain-node-name">{boldHandles(n.name?.slice(0, 60) || n.id)}</span>
-                    <span className="brain-node-content">{(n.synthesis || n.content || '').slice(0, 80)}</span>
-                    <span className="brain-node-e">E={n.energy.toFixed(2)}</span>
+                    <span className="brain-node-energy" style={{ width: `${Math.min(n.energy * 200, 100)}%` }} />
+                    <span className="brain-node-circle" style={{
+                      width: 8 + Math.min(n.weight * 4, 20),
+                      height: 8 + Math.min(n.weight * 4, 20),
+                      background: `hsl(${120 * Math.min(n.energy, 1)}, 80%, ${30 + n.energy * 40}%)`,
+                      borderColor: COLORS[n.type] || '#444',
+                    }} title={`W=${n.weight?.toFixed(1)} E=${n.energy?.toFixed(3)} S=${n.stability?.toFixed(2)}`} />
+                    <span className={`brain-node-type ntype-${(n.nodeType || n.subtype || n.type || '').toLowerCase()}`}>{n.nodeType || n.subtype || n.type}</span>
+                    <span className="brain-node-name">{boldHandles(n.name || n.id)}</span>
+                    <span className="brain-node-tags">
+                      {n.selfRelevance > 0.1 && <span className="tag tag-self" title="self relevance">self</span>}
+                      {n.partnerRelevance > 0.1 && <span className="tag tag-partner" title="partner relevance">partner</span>}
+                      {n.goalRelevance > 0.1 && <span className="tag tag-goal" title="goal relevance">goal</span>}
+                      {n.care > 0.1 && <span className="tag tag-care" title="care affinity">care</span>}
+                      {n.achievement > 0.1 && <span className="tag tag-achieve" title="achievement">achieve</span>}
+                      {n.novelty > 0.1 && <span className="tag tag-novelty" title="novelty">novelty</span>}
+                      {n.risk > 0.1 && <span className="tag tag-risk" title="risk">risk</span>}
+                    </span>
+                    <span className="brain-node-meta">
+                      {n.activations > 0 && <span className="meta-act" title="activation count">x{n.activations}</span>}
+                      <span className="meta-e">E={n.energy?.toFixed(2)}</span>
+                      {n.lastActive ? <span className="meta-time">{timeAgo(n.lastActive)}</span> : n.created ? <span className="meta-time">{timeAgo(n.created)}</span> : ''}
+                    </span>
                   </div>
                 ))}
               </div>

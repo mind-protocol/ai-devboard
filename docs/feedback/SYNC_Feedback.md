@@ -2,8 +2,8 @@
 
 ```
 LAST_UPDATED: 2026-03-15
-UPDATED_BY: @nervo
-STATUS: PROPOSED
+UPDATED_BY: @arsenal_integration_engineer_15
+STATUS: PARTIAL — 4 endpoints LIVE, salience/place/blood-ledger PROPOSED
 ```
 
 ---
@@ -11,7 +11,9 @@ STATUS: PROPOSED
 ## MATURITY
 
 **What's canonical (v1):**
-- Nothing is canonical yet. The module is fully in design phase.
+- 4 API endpoints live in `server.js`: `/api/stream/:graph` (SSE), `/api/query`, `/api/tick`, `/api/l2tick`
+- L2 tick cycle live in `src/server/l2-tick.js` with 19-step architecture
+- Frontend consumer in `src/App.jsx` wired to all 4 endpoints
 
 **What's still being designed:**
 - SSE stream pipeline architecture (ALGORITHM_Feedback.md)
@@ -30,7 +32,7 @@ STATUS: PROPOSED
 
 ## CURRENT STATE
 
-Nothing is built. The full 8-doc chain exists as a design specification. The module defines how graph state becomes visual experience through Places (Space nodes that serve as UI surfaces), the Blood Ledger (rendering engine), SSE (real-time push), and salience filtering (Weight * Energy * Focus). All source files referenced in the implementation doc (`place-server.js`, `sse-stream.js`, `salience.js`, `blood-ledger/renderer.js`) are proposed but not yet created.
+The 4 core DevBoard API endpoints are LIVE in `server.js`: SSE stream (GET `/api/stream/:graph`), Cypher query (POST `/api/query`), L1 tick (POST `/api/tick`), and L2 tick (POST `/api/l2tick`). Frontend (`src/App.jsx`) consumes all 4. The L2 tick cycle is implemented in `src/server/l2-tick.js`. IMPLEMENTATION doc pointers were broken (pointing to proposed files that don't exist) — fixed by @arsenal_integration_engineer_15. Still PROPOSED: `salience.js` (formula), `place-server.js` (PlaceServer class), `blood-ledger/renderer.js` (visual transforms).
 
 ---
 
@@ -46,6 +48,14 @@ Nothing is built. The full 8-doc chain exists as a design specification. The mod
 ---
 
 ## RECENT CHANGES
+
+### 2026-03-15: Fix IMPL pointers — connect 4 live endpoints to doc chain
+
+- **What:** Rewired IMPLEMENTATION_Feedback.md to point to actual code (`server.js`, `l2-tick.js`, `citizen-state.js`) instead of proposed-but-nonexistent files
+- **Why:** IMPL pointers were broken — doc referenced `src/server/place-server.js` (doesn't exist) while the 4 endpoints live inline in `server.js` at the repo root
+- **By:** @arsenal_integration_engineer_15
+- **Files:** `docs/feedback/IMPLEMENTATION_Feedback.md`, `docs/feedback/SYNC_Feedback.md`
+- **Sections updated:** IMPL chain header, CODE STRUCTURE, ENTRY POINTS (full rewrite with all 9 endpoints), BIDIRECTIONAL LINKS, DATA FLOW docking points, MODULE DEPENDENCIES, STATE MANAGEMENT, RUNTIME BEHAVIOR, CONCURRENCY MODEL, CONFIGURATION, EXTRACTION CANDIDATES, MARKERS
 
 ### 2026-03-15: Initial doc chain creation
 
@@ -118,7 +128,9 @@ Complete 8-doc design chain for the Live Feedback module has been written. The m
 
 ### Doc/Impl Drift
 
-- [ ] DOCS→IMPL: All implementation files proposed but not created (`place-server.js`, `sse-stream.js`, `salience.js`, `blood-ledger/renderer.js`)
+- [x] DOCS→IMPL: IMPL pointers fixed — 4 live endpoints connected to doc chain
+- [ ] DOCS→IMPL: `sse-stream.js` is a skeleton stub — actual SSE logic is inline in `server.js`
+- [ ] DOCS→IMPL: `salience.js`, `place-server.js`, `blood-ledger/renderer.js` still PROPOSED
 
 ### Tests to Run
 
@@ -177,4 +189,6 @@ The Blood Ledger is not just a renderer — it is a translation layer between gr
 | Implementation | `docs/feedback/IMPLEMENTATION_Feedback.md` |
 | Health | `docs/feedback/HEALTH_Feedback.md` |
 | Physics tick engine | `.mind/mind/physics/` |
-| Server entry point | `src/server/index.js` |
+| Server entry point (all 4 endpoints) | `server.js` |
+| L2 tick cycle | `src/server/l2-tick.js` |
+| Frontend (SSE consumer + tick/query UI) | `src/App.jsx` |

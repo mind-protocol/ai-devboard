@@ -179,11 +179,18 @@ app.get('/api/brains', async (req, res) => {
       try {
         // Get active nodes sorted by energy
         const raw = await redis.sendCommand(['GRAPH.QUERY', brain,
-          `MATCH (n) WHERE n.energy > 0.005 RETURN labels(n)[0] AS type, n.id AS id, n.name AS name, n.subtype AS subtype, n.energy AS energy, n.weight AS weight, n.synthesis AS synthesis, n.content AS content ORDER BY n.energy DESC LIMIT 20`])
+          `MATCH (n) WHERE n.energy > 0.005 RETURN labels(n)[0] AS type, n.id AS id, n.name AS name, n.subtype AS subtype, n.energy AS energy, n.weight AS weight, n.synthesis AS synthesis, n.content AS content, n.stability AS stability, n.recency AS recency, n.goal_relevance AS goal_rel, n.novelty_affinity AS novelty, n.updated_at_s AS updated, n.created_at_s AS created, n.self_relevance AS self_rel, n.partner_relevance AS partner_rel, n.care_affinity AS care, n.achievement_affinity AS achievement, n.risk_affinity AS risk, n.activation_count AS activations, n.last_activated_s AS last_active, n.node_type AS nodeType ORDER BY n.energy DESC LIMIT 30`])
         const nodes = (raw?.[1] || []).map(row => ({
           type: row[0], id: row[1], name: row[2] || row[1], subtype: row[3] || '',
           energy: parseFloat(row[4]) || 0, weight: parseFloat(row[5]) || 0,
           synthesis: row[6] || '', content: row[7] || '',
+          stability: parseFloat(row[8]) || 0, recency: parseFloat(row[9]) || 0,
+          goalRelevance: parseFloat(row[10]) || 0, novelty: parseFloat(row[11]) || 0,
+          updated: parseInt(row[12]) || null, created: parseInt(row[13]) || null,
+          selfRelevance: parseFloat(row[14]) || 0, partnerRelevance: parseFloat(row[15]) || 0,
+          care: parseFloat(row[16]) || 0, achievement: parseFloat(row[17]) || 0,
+          risk: parseFloat(row[18]) || 0, activations: parseInt(row[19]) || 0,
+          lastActive: parseInt(row[20]) || null, nodeType: row[21] || '',
         }))
         if (nodes.length > 0) {
           // Get total node count
@@ -195,7 +202,25 @@ app.get('/api/brains', async (req, res) => {
             `MATCH (n) WHERE n.energy > 0.005 RETURN labels(n)[0], count(n) AS cnt ORDER BY cnt DESC`])
           const types = (typeRaw?.[1] || []).map(r => ({ type: r[0], count: r[1] }))
 
-          brains.push({ handle, brain, totalNodes, activeNodes: nodes.length, types, nodes })
+          // Get current place and task from L2 graphs
+          let place = null
+          let task = null
+          for (const g of ['org_ai_dev_dashboard', 'venezia', 'lumina_prime']) {
+            try {
+              if (!place) {
+                const placeRaw = await redis.sendCommand(['GRAPH.QUERY', g,
+                  `MATCH (a:Actor)-[r:link]->(s:Space) WHERE a.id = 'citizen:${handle}' AND r.r_type = 'AT' RETURN s.name LIMIT 1`])
+                if (placeRaw?.[1]?.[0]) place = placeRaw[1][0][0]
+              }
+              if (!task) {
+                const taskRaw = await redis.sendCommand(['GRAPH.QUERY', g,
+                  `MATCH (m:Moment)-[r:link]->(a:Actor) WHERE a.id = 'citizen:${handle}' AND m.type = 'task_run' AND m.status IN ['running','claimed'] RETURN m.name, m.status LIMIT 1`])
+                if (taskRaw?.[1]?.[0]) task = { name: taskRaw[1][0][0], status: taskRaw[1][0][1] }
+              }
+            } catch (_) {}
+          }
+
+          brains.push({ handle, brain, totalNodes, activeNodes: nodes.length, types, nodes, place, task })
         }
       } catch (_) {}
     }
