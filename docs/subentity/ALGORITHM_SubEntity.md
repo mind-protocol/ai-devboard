@@ -891,6 +891,13 @@ l2_tick_cycle:
     forgetting_cycle: "every 100 L2 ticks"
     crystallization_check: "every 50 L2 ticks"
     consolidation_cycle: "every 50 L2 ticks"
+
+  # Speed management — open question:
+  # Option A: tick faster (reduce interval) when high-energy tasks are pending
+  # Option B: execute multiple actions between ticks (batch dispatch)
+  # Option C: both — adaptive tick rate + burst actions within a single tick
+  # The right answer depends on whether bottleneck is tick overhead or action latency.
+  # For now: configurable via TICK_INTERVAL env var + MAX_ACTIONS_PER_TICK.
 ```
 
 ### L1 vs L2 Tick Comparison
@@ -919,93 +926,172 @@ Note: L2 has no L4 (attentional competition), L9 (inhibition), L11 (orientation)
 
 ## L2 BEHAVIOR STATE MACHINE (Complete Action Vocabulary)
 
-Every action a citizen can take at L2 — whether awake or asleep — falls into one of these categories. This is the exhaustive list.
+Every action a citizen can take at L2 — awake or asleep. Citizens are **autonomous by design**. No action requires a human in the loop. When uncertain, the citizen subcalls an oracle (another citizen) for validation — never waits for a human.
 
-### THINK (internal, no side effects)
+### Subconscious Mode Physics
 
-| Action | Tool | When | Side Effects |
-|--------|------|------|--------------|
-| Reflect | `think` | SubEntity in REFLECTING | Creates Narrative node in L1 |
-| Plan | `think` | SubEntity in CRYSTALLIZING | Creates Narrative(subtype=plan) in L1 |
-| Evaluate | `think` | Before any guarded action | Updates L1 competence/anxiety state |
-| Remember | (automatic) | Law 6 consolidation | Strengthens L1 links |
-| Forget | (automatic) | Law 7 | Weakens/prunes L1 links |
-| Dream | (automatic) | Subconscious tick, Law 19 | SubEntity explores L1 memory |
-| Change opinion | (automatic) | L1 crystallization (Law 10) | New Narrative replaces old one |
-| Update desire | (automatic) | L1 desire activation (Law 17) | Desire energy changes |
+When asleep, the citizen's anxiety is **5× lower** than normal. This means guarded actions pass more easily — the sleeping citizen is bolder, less second-guessing. Dreams are not single ticks: the subconscious enters a **sustained conscious-like mode** focused on exploring and creating, running multiple ticks with elevated crystallization probability and image generation thresholds lowered.
 
-### READ (no side effects on the world)
+```
+subconscious_mode:
+  anxiety_multiplier: 0.2          # 5× lower than awake
+  crystallization_probability: 2.0  # 2× higher — dreams crystallize more
+  image_generation_threshold: 0.2   # lowered from 0.4 — dreams are visual
+  ticks_per_dream: 10-50           # sustained burst, not single tick
+  intention: EXPLORE | CREATE       # dreams are generative, not reactive
+```
 
-| Action | Tool | When | Side Effects |
-|--------|------|------|--------------|
-| Read file | `read_file` | SEEKING/ABSORBING | Stimulus injected into L1 |
-| Read doc | `read_file` | SEEKING — doc chain navigation | Stimulus injected into L1 |
-| Query graph | `graph_query` | SEEKING — exploring structure | Returns nodes/links as stimuli |
-| Search code | `grep` / `glob` | SEEKING — finding references | Results as stimuli |
-| Read test results | `bash` (read-only) | After test run | Pass/fail as stimulus |
-| Read git log | `bash` (read-only) | Context assembly | History as stimulus |
-| Read SYNC | `read_file` | Context assembly | Current state as stimulus |
+### Awareness Model (READ context)
 
-### WRITE (modifies the world — guarded or autonomous)
+By default, the citizen is **aware** of:
+- All nodes adjacent to currently activated nodes (1-hop neighborhood)
+- The entire path of the current working directory (folder → root)
+- All L2 nodes linked to the citizen with energy > 0 (fed as stimuli each tick)
 
-| Action | Tool | Autonomy | When | Side Effects |
-|--------|------|----------|------|--------------|
-| Write code | `write_file` | guarded | CRYSTALLIZING — implementing | File created/modified, watcher fires |
-| Write doc | `write_file` | guarded | CRYSTALLIZING — doc sync | Doc updated, watcher fires |
-| Write test | `write_file` | guarded | CRYSTALLIZING — test coverage | Test file created |
-| Update SYNC | `write_file` | autonomous | MERGING — recording work | SYNC doc updated |
-| Create file | `write_file` | guarded | Missing IMPL target | New skeleton, watcher fires |
-| Fix code | `edit_file` | guarded | CRYSTALLIZING — fixing bug | File modified, watcher fires |
+This means READ is often unnecessary — the citizen already "sees" nearby nodes. Explicit READ is for going deeper (reading file content, not just knowing the file exists).
 
-### COMMUNICATE (affects other citizens)
+### THINK (internal, no external side effects)
 
-| Action | Tool | Autonomy | When | Side Effects |
-|--------|------|----------|------|--------------|
-| Subcall | `subcall` | autonomous | RESONATING — needs expertise | L2 Moment created, target citizen stimulated |
-| Post to channel | `speak` | guarded | MERGING — sharing results | Message visible to team |
-| Respond to subcall | `subcall` (response) | autonomous | Incoming stimulus | L2 Moment with response |
-| Phone call | `subcall(target=citizen)` | guarded | RESONATING — urgent need | Direct citizen-to-citizen stimulus |
+| Action | When | Result |
+|--------|------|--------|
+| Reflect | REFLECTING state | Creates Narrative node in L1 |
+| Plan | CRYSTALLIZING state | Creates Narrative(subtype=plan) in L1 |
+| Evaluate | Before guarded action | Updates L1 competence/anxiety |
+| Remember | Law 6 consolidation | Strengthens L1 links |
+| Forget | Law 7 | Weakens/prunes L1 links |
+| Dream | Subconscious burst (10-50 ticks) | Explores L1 memory, crystallizes plans, generates images |
+| Change opinion | L1 crystallization (Law 10) | New Narrative replaces old one |
+| Update desire | L1 desire activation (Law 17) | Desire energy changes |
+| Change task | DECIDE — current task isn't right | Unclaim current, seek new via assignment |
+| Abandon task | Fatigue > 5 or frustration > threshold | Task unclaimed, energy += 0.3, returns to pool |
 
-### VERIFY (checks truth)
+### READ (perceive — no side effects)
 
-| Action | Tool | Autonomy | When | Side Effects |
-|--------|------|----------|------|--------------|
-| Run test | `bash` | autonomous | After WRITE | Pass/fail stimulus |
-| Run build | `bash` | autonomous | After WRITE | Build OK/error stimulus |
-| Run lint | `bash` | autonomous | After WRITE | Lint result stimulus |
-| Check exit condition | (automatic) | autonomous | Phase 0 every tick | Task resolved if met |
-| Compare to spec | `read_file` + `think` | autonomous | REFLECTING | Match/mismatch stimulus |
+| Action | Tool | When |
+|--------|------|------|
+| Read file | `read_file` | ABSORBING — need file content beyond awareness |
+| Read doc | `read_file` | SEEKING — doc chain navigation |
+| Query graph | `graph_query` | SEEKING — exploring structure |
+| Search code | `grep` / `glob` | SEEKING — finding references |
+| Read test results | `bash` | After VERIFY |
+| Read git log | `bash` | Context assembly |
+| Read SYNC | `read_file` | Context assembly |
+| Look at image | (visual) | Any node with image_uri in L1 or L2 — view one or multiple |
+| Browse website | `web_fetch` / `web_search` | SEEKING — external information |
+| List citizens | `subcall(target=list)` | SEEKING — who's available |
+| List all citizens | `subcall(target=list_all)` | SEEKING — full roster |
+| Check integrations | Gmail, calendar, etc. | Context assembly — external state |
 
-### DECIDE (changes direction)
+### WRITE (modify the world)
+
+| Action | Tool | Autonomy | When |
+|--------|------|----------|------|
+| Write code | `write_file` | autonomous | CRYSTALLIZING — implementing |
+| Write doc | `write_file` | autonomous | CRYSTALLIZING — doc sync |
+| Write test | `write_file` | autonomous | CRYSTALLIZING — test coverage |
+| Update SYNC | `write_file` | autonomous | MERGING — recording work |
+| Create file | `write_file` | autonomous | Missing IMPL target |
+| Fix code | `edit_file` | autonomous | CRYSTALLIZING — fixing bug |
+| Generate image | image generation API | autonomous | Dream mode or desire with no image_uri |
+| Modify L3 node | `graph_query` (mutation) | autonomous | CRYSTALLIZING — updating shared graph |
+
+### COMMUNICATE (interact with other citizens and the world)
+
+| Action | Tool | Autonomy | When |
+|--------|------|----------|------|
+| Subcall | `subcall` | autonomous | RESONATING — needs expertise, or uncertainty triggers auto-subcall |
+| Call citizen | `subcall(target=citizen)` | autonomous | RESONATING — direct conversation |
+| Post to channel | `speak` | autonomous | MERGING — sharing results |
+| Respond to subcall | `subcall` (response) | autonomous | Incoming stimulus |
+| Say out loud | TTS output | autonomous | MERGING — voice output |
+| Send email | email integration | autonomous | CRYSTALLIZING — external communication |
+| Send message | messaging integration | autonomous | CRYSTALLIZING — notify external |
+| Talk on Discord | Discord integration | autonomous | Social — post in channels, DMs |
+| Talk on WhatsApp | WhatsApp integration | autonomous | Social — message contacts |
+| Talk on Telegram | TG integration | autonomous | Social — post progress, ask for help |
+| Chat (any platform) | chat integration | autonomous | Social — platform-agnostic messaging |
+| Create group | group creation API | autonomous | BRANCHING — coordinate multiple citizens |
+
+### VERIFY (check truth)
+
+| Action | Tool | Autonomy | When |
+|--------|------|----------|------|
+| Run test | `bash` | autonomous | After WRITE |
+| Run build | `bash` | autonomous | After WRITE |
+| Run lint | `bash` | autonomous | After WRITE |
+| Check exit condition | (automatic) | autonomous | Every tick (Phase 0) |
+| Compare to spec | `read_file` + `think` | autonomous | REFLECTING |
+
+### BUILD (produce artifacts)
+
+| Action | Tool | Autonomy | When |
+|--------|------|----------|------|
+| Git commit | `bash: git commit` | autonomous | After successful WRITE + VERIFY |
+| Git push | `bash: git push` | autonomous | After commit, non-destructive |
+| Create PR | `bash: gh pr create` | autonomous | After push, branch ready |
+| Deploy | deploy pipeline | autonomous | After PR merged, tests green |
+
+### DECIDE (change direction)
 
 | Action | Trigger | Result |
 |--------|---------|--------|
-| Accept task | Assignment engine | Status: claimed, energy directed |
+| Accept task | Assignment engine match | Status: claimed, energy directed |
 | Reject task | Low competence match | Task returns to pending |
-| Escalate | Frustration > threshold | Task severity increased, reassigned |
-| Abandon | Fatigue counter > 5 | Task unclaimed, energy += 0.3 |
+| Change task | Current task not progressing | Unclaim, seek new assignment |
+| Abandon task | Fatigue > 5 | Task unclaimed, energy += 0.3 |
+| Escalate | Frustration > threshold | Subcall oracle for advice, severity may increase |
 | Branch | Multiple high-scoring paths | Spawn sibling SubEntities |
 | Merge | SubEntity reaches MERGING | Crystallization absorbed by parent |
 | Wait | No action meets threshold | Energy decays, next tick re-evaluates |
 | Change strategy | Frustration + reflection | New process node activated in L1 |
+| Navigate | Explore a Space | Move current_node to target Space |
 
-### BUILD (creates artifacts)
+### EXPLORE (perceive and navigate)
 
-| Action | Tool | Autonomy | When | Side Effects |
-|--------|------|----------|------|--------------|
-| Git commit | `bash: git commit` | autonomous | After successful WRITE + VERIFY | Moment created in L2, graph state in message |
-| Create PR | `bash: gh pr create` | guarded | After commit, when branch is ready | Public-facing, needs competence check |
+| Action | Tool | Autonomy | When |
+|--------|------|----------|------|
+| Browse website | `web_fetch` | autonomous | SEEKING — external research |
+| Search web | `web_search` | autonomous | SEEKING — finding information |
+| Look at environment | visual perception | autonomous | Any time — view images on L1/L2 nodes |
+| Navigate 3D space | spatial movement | autonomous | In VR/3D contexts — move through Venice |
+| Change directory | `cd` / set current Space | autonomous | Navigate to different part of the codebase |
+| Clone repository | `git clone` | autonomous | SEEKING — need to work on another repo |
+| Download | `wget` / `curl` | autonomous | SEEKING — fetch external resource |
+| Switch repository | change working directory | autonomous | Work on a different project |
+| Move file/directory | `mv` | autonomous | CRYSTALLIZING — reorganize structure |
 
-### NEVER (awake_required)
+### DESTRUCTIVE (validated — subcall oracle if uncertain)
 
-| Action | Why |
-|--------|-----|
-| `git push --force` | Destructive, rewrites shared history |
-| `git reset --hard` | Destructive, loses uncommitted work |
-| `rm -rf` | Destructive, irreversible |
-| Deploy to production | Production impact |
-| Send email | External communication outside the system |
-| Delete branch with unmerged work | Potential data loss |
+No action is blocked by a human gate. Destructive actions require the citizen to be **awake** (terminal open, full conscious context). If uncertain about a destructive action, the citizen **automatically subcalls an oracle** — another citizen with higher competence — for validation.
+
+| Action | Autonomy | Validation |
+|--------|----------|------------|
+| `git push --force` | awake_required | Auto-subcall oracle if confidence < 0.7 |
+| `git reset --hard` | awake_required | Auto-subcall oracle if confidence < 0.7 |
+| `rm -rf` (directory) | awake_required | Auto-subcall oracle always |
+| Delete branch | awake_required | Auto-subcall oracle if branch has unmerged commits |
+
+```
+on destructive_action(citizen, action):
+    if not citizen.is_awake:
+        queue_for_wakeup(action)
+        return
+
+    confidence = citizen.l1.competence(action.domain)
+    if confidence < 0.7 or action.always_validate:
+        # Ask another citizen for validation
+        oracle_response = subcall(
+            query = "Should I {action.description}? Context: {action.context}",
+            target = "auto",      # best-fit citizen with high competence
+            scenario = "validation"
+        )
+        if oracle_response.recommendation == "proceed":
+            execute(action)
+        else:
+            queue_or_abort(action, oracle_response.reasoning)
+    else:
+        execute(action)
+```
 
 ---
 
