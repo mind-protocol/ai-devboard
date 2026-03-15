@@ -76,11 +76,11 @@ async function sendMessage(redis, target, message) {
     const prompt = `You received a message from @${SENDER}:\n\n"${message}"\n\nRespond as yourself (@${handle}). Be direct, use your personality and expertise.`
 
     const response = execSync(
-      `echo '${prompt.replace(/'/g, "'\\''")}' | claude --print`,
+      `echo '${prompt.replace(/'/g, "'\\''")}' | claude --print --continue --dangerously-skip-permissions`,
       {
         cwd: citizenDir,
         encoding: 'utf-8',
-        timeout: 120000,
+        timeout: 600000,
         maxBuffer: 5 * 1024 * 1024,
       }
     ).trim()
@@ -145,8 +145,8 @@ async function pollMode(redis) {
         try {
           const prompt = `You received a message from @${from}:\n\n"${content}"\n\nRespond as yourself (@${handle}). Be direct.`
           const response = execSync(
-            `echo '${prompt.replace(/'/g, "'\\''")}' | claude --print`,
-            { cwd: citizenDir, encoding: 'utf-8', timeout: 120000, maxBuffer: 5 * 1024 * 1024 }
+            `echo '${prompt.replace(/'/g, "'\\''")}' | claude --print --continue --dangerously-skip-permissions`,
+            { cwd: citizenDir, encoding: 'utf-8', timeout: 600000, maxBuffer: 5 * 1024 * 1024 }
           ).trim()
 
           console.log(`  @${handle}: ${response.slice(0, 200)}`)
