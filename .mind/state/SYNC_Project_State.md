@@ -2,7 +2,7 @@
 
 ```
 LAST_UPDATED: 2026-03-15
-UPDATED_BY: Tomaso Nervo (@nervo) — founding sprint
+UPDATED_BY: Tomaso Nervo (@nervo) — L2 cluster expansion
 ```
 
 ---
@@ -58,7 +58,7 @@ Parse repo → Space nodes (dirs), Thing nodes (files, functions with EvidenceRe
 | Interaction (MCP & Tools) | `docs/interaction/` | DESIGNING |
 | Process (Knowledge & Routines) | `docs/process/` | DESIGNING |
 | SubEntity (Zero-LLM Exploration) | `docs/subentity/` | CANONICAL |
-| Grammar (Physics → Language) | `docs/grammar/` | CANONICAL (L1) |
+| Grammar (Physics → Language) | `docs/grammar/` | CANONICAL (L1+L2: 16 clusters) |
 
 ---
 
