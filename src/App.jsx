@@ -18,6 +18,8 @@ function App() {
   const [status, setStatus] = useState('Ready')
   const [tickSpeed, setTickSpeed] = useState(0) // 0=paused, 1=x1, 2=x2, 3=x3
   const [streaming, setStreaming] = useState(false)
+  const [citizens, setCitizens] = useState([])
+  const [useL2, setUseL2] = useState(false)
   const tickRef = useRef(null)
   const sseRef = useRef(null)
   const simRef = useRef(null) // hold D3 simulation for live updates
@@ -63,18 +65,21 @@ function App() {
   const runTick = async () => {
     setStatus('Ticking...')
     try {
-      const res = await fetch('/api/tick', {
+      const endpoint = useL2 ? '/api/l2tick' : '/api/tick'
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ graph: graphName }),
       })
       const data = await res.json()
-      // If SSE is connected, the tick event will push the graph update
-      // If not connected, fall back to polling
-      if (!streaming) {
+      if (data.citizens) {
+        setCitizens(data.citizens)
+        const active = data.citizens.filter(c => c.cluster).length
+        setStatus(`L2 tick: ${data.decayed} decayed, ${data.propagated} propagated, ${active} citizens acted (${data.duration_ms}ms)`)
+      } else if (!streaming) {
         setStatus(`Tick: ${data.decayed || 0} decayed, ${data.propagated || 0} propagated`)
-        runQuery()
       }
+      if (!streaming) runQuery()
     } catch (e) { setStatus(`Tick error: ${e.message}`) }
   }
 
@@ -162,6 +167,8 @@ function App() {
           <button className={tickSpeed === 3 ? 'active' : ''} onClick={() => setTickSpeed(3)}>▶▶▶ x3</button>
           <button onClick={runTick}>⚡ 1 tick</button>
         </div>
+        <button className={`l2-toggle ${useL2 ? 'active' : ''}`}
+          onClick={() => setUseL2(!useL2)}>{useL2 ? 'L2' : 'L1'}</button>
         <span className={`stream-indicator ${streaming ? 'live' : 'off'}`}>
           {streaming ? 'SSE LIVE' : 'SSE OFF'}
         </span>
@@ -170,6 +177,18 @@ function App() {
           {Object.entries(COLORS).map(([k, v]) => <span key={k} style={{ color: v }}>● {k} </span>)}
         </div>
       </div>
+      {citizens.length > 0 && (
+        <div className="citizen-panel">
+          {citizens.map(c => (
+            <div key={c.id} className={`citizen-card ${c.cluster?.toLowerCase() || 'idle'}`}>
+              <span className="citizen-name">{c.id.replace('citizen:', '')}</span>
+              <span className="citizen-cluster">{c.cluster || 'idle'}</span>
+              <span className="citizen-sentence">{c.sentence?.slice(0, 50) || ''}</span>
+              {c.action?.action && <span className="citizen-action">{c.action.action}</span>}
+            </div>
+          ))}
+        </div>
+      )}
       <svg ref={svgRef} width="100%" height="100%" />
     </div>
   )

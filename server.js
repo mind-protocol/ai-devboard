@@ -147,6 +147,77 @@ app.post('/api/tick', async (req, res) => {
   }
 })
 
+// Citizen status — current state of all citizens
+app.get('/api/citizens/:graph', async (req, res) => {
+  const { graph } = req.params
+  try {
+    const { getCitizenState } = await import('./src/server/citizen-state.js')
+    const { scoreBehaviors, applyEmotionalBias } = await import('./src/server/behavior-scorer.js')
+
+    // Get all citizen IDs
+    const idRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+      `MATCH (a:Actor) WHERE NOT a.id STARTS WITH 'org:' RETURN a.id, a.name`])
+    const citizens = []
+    for (const row of (idRes?.[1] || [])) {
+      const [id, name] = row
+      try {
+        const state = await getCitizenState(redis, graph, id)
+        let scores = scoreBehaviors(state)
+        scores = applyEmotionalBias(scores, state.recentMoments || [])
+        const topBehaviors = Object.entries(scores).sort(([,a],[,b]) => b - a).slice(0, 3)
+        citizens.push({
+          id, name: name || id,
+          drives: state.drives,
+          arousal: state.arousal,
+          flow: state.flow,
+          isAwake: state.isAwake,
+          currentTask: state.currentTask?.name || null,
+          topDesire: state.desires?.[0]?.name || null,
+          location: state.location?.name || null,
+          topBehaviors: topBehaviors.map(([k, v]) => ({ cluster: k, score: +v.toFixed(3) })),
+        })
+      } catch (_) { citizens.push({ id, name: name || id, error: 'state read failed' }) }
+    }
+    res.json(citizens)
+  } catch (e) { res.json({ error: e.message }) }
+})
+
+// Tick history for monitoring
+let lastTickResult = null
+const tickHistory = []  // last 100 ticks
+const MAX_HISTORY = 100
+
+// GET /api/monitor/:graph — full dashboard: last tick + citizen states + stats
+app.get('/api/monitor/:graph', async (req, res) => {
+  const { graph } = req.params
+  try {
+    // Node/link counts
+    const countRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+      `MATCH (n) RETURN labels(n)[0] AS type, count(n) AS cnt`])
+    const linkRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+      `MATCH ()-[r:link]->() RETURN r.r_type, count(r) AS cnt ORDER BY cnt DESC`])
+    const taskRes = await redis.sendCommand(['GRAPH.QUERY', graph,
+      `MATCH (n:Moment) WHERE n.type = 'task_run' RETURN n.status, count(n) AS cnt`])
+
+    res.json({
+      lastTick: lastTickResult,
+      tickCount: tickHistory.length,
+      avgDuration: tickHistory.length > 0
+        ? Math.round(tickHistory.reduce((s, t) => s + t.duration_ms, 0) / tickHistory.length)
+        : 0,
+      nodeCounts: (countRes?.[1] || []).map(r => ({ type: r[0], count: r[1] })),
+      linkCounts: (linkRes?.[1] || []).slice(0, 10).map(r => ({ type: r[0] || '(legacy)', count: r[1] })),
+      taskCounts: (taskRes?.[1] || []).map(r => ({ status: r[0], count: r[1] })),
+    })
+  } catch (e) { res.json({ error: e.message }) }
+})
+
+// GET /api/trace/:graph — last N tick traces for debugging
+app.get('/api/trace/:graph', (req, res) => {
+  const n = Math.min(parseInt(req.query.n) || 10, MAX_HISTORY)
+  res.json(tickHistory.slice(-n))
+})
+
 // Run the full L2 tick cycle (19 steps + citizen behavior selection)
 app.post('/api/l2tick', async (req, res) => {
   const { graph } = req.body
@@ -154,6 +225,9 @@ app.post('/api/l2tick', async (req, res) => {
 
   try {
     const result = await runL2Tick(redis, graph)
+    lastTickResult = { ...result, timestamp: Date.now(), graph }
+    tickHistory.push(lastTickResult)
+    if (tickHistory.length > MAX_HISTORY) tickHistory.shift()
 
     // Emit via SSE if clients connected
     if (sseClients.has(graph) && sseClients.get(graph).size > 0) {
