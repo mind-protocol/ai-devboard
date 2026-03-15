@@ -11,6 +11,14 @@ const COLORS = {
 }
 
 // Universe colors — one per graph
+const PRESET_QUERIES = [
+  { label: 'Citizens & Links', query: 'MATCH (a:Actor)-[r]->(n) RETURN a, r, n LIMIT 200' },
+  { label: 'Active Nodes', query: 'MATCH (n)-[r]->(m) WHERE n.energy > 0.1 RETURN n, r, m LIMIT 200' },
+  { label: 'Tasks', query: 'MATCH (t:Moment)-[r]->(n) WHERE t.type = "task_run" RETURN t, r, n LIMIT 100' },
+  { label: 'Full Graph', query: 'MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 500' },
+]
+
+// Universe colors — one per graph
 const GRAPH_COLORS = {
   org_ai_dev_dashboard: '#3b82f6',
   venezia: '#f59e0b',
@@ -72,7 +80,7 @@ function starScore(n) {
 function App() {
   const svgRef = useRef()
   const [graphName, setGraphName] = useState('lumina_prime')
-  const [query, setQuery] = useState('MATCH (n)-[r]->(m) RETURN n, r, m')
+  const [query, setQuery] = useState('MATCH (a:Actor)-[r]->(n) RETURN a, r, n LIMIT 200')
   const [graphs, setGraphs] = useState([])
   const [status, setStatus] = useState('Ready')
   const [tickSpeed, setTickSpeed] = useState(0) // 0=paused, 1=x1, 2=x2, 3=x3
@@ -88,6 +96,8 @@ function App() {
   const [typeFilter, setTypeFilter] = useState(new Set()) // empty = show all
   const [stats, setStats] = useState({ activeCitizens: 0, totalMoments: 0 })
   const [searchText, setSearchText] = useState('') // text search across fields
+  const [expandedBrain, setExpandedBrain] = useState(null)
+  const [expandedL2, setExpandedL2] = useState(null) // L2 connections for expanded brain
   const tickRef = useRef(null)
   const sseRef = useRef(null)
   const simRef = useRef(null) // hold D3 simulation for live updates
@@ -99,6 +109,15 @@ function App() {
     loadNodeList()
     loadStats()
   }, [])
+
+  // Auto-run query when graph changes
+  const graphInitRef = useRef(true)
+  useEffect(() => {
+    if (graphInitRef.current) { graphInitRef.current = false; return }
+    runQuery()
+    loadNodeList()
+    loadStats()
+  }, [graphName])
 
   const loadBrains = async () => {
     setStatus('Loading L1 brains...')
@@ -167,6 +186,21 @@ function App() {
     }
     return () => { if (tickRef.current) clearInterval(tickRef.current) }
   }, [tickSpeed, graphName])
+
+  // Fetch L2 data when a brain card is expanded
+  useEffect(() => {
+    if (!expandedBrain) { setExpandedL2(null); return }
+    setExpandedL2(null)
+    fetch('/api/dashboard/org_ai_dev_dashboard')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const citizen = data.find(c => c.handle === expandedBrain)
+          setExpandedL2(citizen || null)
+        }
+      })
+      .catch(() => setExpandedL2(null))
+  }, [expandedBrain])
 
   const runTick = async () => {
     setStatus('Ticking...')
@@ -349,6 +383,10 @@ function App() {
         <select value={graphName} onChange={e => setGraphName(e.target.value)}>
           {graphs.map(g => <option key={g} value={g}>{g}</option>)}
           {!graphs.includes(graphName) && <option value={graphName}>{graphName}</option>}
+        </select>
+        <select value="" onChange={e => { if (e.target.value) setQuery(e.target.value) }}>
+          <option value="">Presets...</option>
+          {PRESET_QUERIES.map(p => <option key={p.label} value={p.query}>{p.label}</option>)}
         </select>
         <input value={query} onChange={e => setQuery(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && runQuery()} placeholder="Cypher query..." />

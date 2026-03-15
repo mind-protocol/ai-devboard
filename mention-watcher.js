@@ -155,6 +155,16 @@ async function wakeCitizen(redis, handle, context, sourceFile, mentionedBy) {
           `MERGE (m:Moment {id: '${esc(respId)}'}) SET m.name = '${esc(response.slice(0, 120))}', m.type = 'message', m.subtype = 'dialogue', m.content = '${esc(response.slice(0, 2000))}', m.energy = 0.6, m.weight = 0.6, m.origin_citizen = '${handle}', m.target_citizen = '${mentionedBy}', m.status = 'delivered', m.created_at_s = ${nowS + 1}`
         ])
       } catch (_) {}
+
+      // Append response to source file
+      try {
+        const { appendFile } = await import('fs/promises')
+        const responseBlock = `\n\n### @${handle} — Response\n\n${response}\n\n— @${handle}\n`
+        await appendFile(sourceFile, responseBlock)
+        console.log(`  Appended to ${sourceFile}`)
+      } catch (e) {
+        console.log(`  Could not append to ${sourceFile}: ${e.message?.slice(0, 40)}`)
+      }
     } else {
       console.log(`  @${handle} — no response (exit ${code})`)
     }

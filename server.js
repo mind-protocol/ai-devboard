@@ -1,11 +1,18 @@
 import express from 'express'
 import { createClient } from 'redis'
+import { spawn } from 'child_process'
+import { existsSync } from 'fs'
+import { resolve } from 'path'
 import { runL2Tick } from './src/server/l2-tick.js'
 import { getCitizenState } from './src/server/citizen-state.js'
 import { scoreBehaviors, applyEmotionalBias } from './src/server/behavior-scorer.js'
 
 const app = express()
 app.use(express.json())
+
+// --- Auto-tick state ---
+let autoTickInterval = null
+let autoTickRate = 0
 
 const redis = createClient({ url: `redis://${process.env.FALKORDB_HOST || 'localhost'}:${process.env.FALKORDB_PORT || 6379}` })
 await redis.connect()
@@ -388,6 +395,35 @@ app.post('/api/l2tick', async (req, res) => {
   }
 })
 
+// Auto-tick: run L2 tick on a repeating interval
+// rate: 0=stop, 1=5s, 2=2.5s, 3=1.7s
+app.post('/api/autotick', (req, res) => {
+  const { graph, rate } = req.body
+  if (autoTickInterval) { clearInterval(autoTickInterval); autoTickInterval = null }
+  autoTickRate = rate || 0
+  if (autoTickRate > 0 && graph) {
+    const ms = 5000 / autoTickRate
+    autoTickInterval = setInterval(async () => {
+      try {
+        const result = await runL2Tick(redis, graph)
+        // SSE emit
+        if (sseClients.has(graph) && sseClients.get(graph).size > 0) {
+          sseEmit(graph, 'tick', result)
+        }
+        lastTickResult = { ...result, timestamp: Date.now(), graph }
+        tickHistory.push(lastTickResult)
+        if (tickHistory.length > MAX_HISTORY) tickHistory.shift()
+      } catch (_) {}
+    }, ms)
+  }
+  res.json({ autoTick: autoTickRate > 0, rate: autoTickRate, interval: autoTickRate > 0 ? 5000 / autoTickRate : 0 })
+})
+
+// Auto-tick status
+app.get('/api/autotick/status', (req, res) => {
+  res.json({ running: autoTickRate > 0, rate: autoTickRate, tickCount: tickHistory.length })
+})
+
 function parseGraphResult(raw) {
   const nodes = new Map()
   const links = []
@@ -460,6 +496,104 @@ function parseGraphResult(raw) {
 
   return { nodes: [...nodes.values()], links: remappedLinks }
 }
+
+// --- Citizen message dispatch (HTTP version of dispatch.js) ---
+
+const MSG_GRAPH = 'org_ai_dev_dashboard'
+const CITIZEN_DIRS = [
+  '/home/mind-protocol/mind-mcp/citizens',
+  '/home/mind-protocol/ai_devboard/mind-repo/citizens',
+  '/home/mind-protocol/cities-of-light/citizens',
+]
+
+function findCitizenDir(handle) {
+  for (const base of CITIZEN_DIRS) {
+    const dir = resolve(base, handle)
+    if (existsSync(dir)) return dir
+  }
+  return null
+}
+
+function escGraph(s) {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')
+}
+
+app.post('/api/message', async (req, res) => {
+  const { target, message, sender } = req.body
+  if (!target || !message) return res.status(400).json({ error: 'Missing target or message' })
+
+  const handle = target.replace(/^@/, '')
+  const from = (sender || 'nervo').replace(/^@/, '')
+  const now = Math.floor(Date.now() / 1000)
+  const momentId = `moment:msg:${from}_to_${handle}_${now}`
+
+  // 1. Create Moment in L2 graph with CREATED + TARGETS links
+  try {
+    await redis.sendCommand(['GRAPH.QUERY', MSG_GRAPH,
+      `MERGE (m:Moment {id: '${escGraph(momentId)}'}) SET m.name = '${escGraph(message.slice(0, 120))}', m.type = 'message', m.subtype = 'dialogue', m.content = '${escGraph(message)}', m.energy = 0.7, m.weight = 0.6, m.stability = 0.5, m.origin_citizen = '${from}', m.target_citizen = '${handle}', m.status = 'pending', m.created_at_s = ${now}, m.updated_at_s = ${now}`
+    ])
+    await redis.sendCommand(['GRAPH.QUERY', MSG_GRAPH,
+      `MATCH (m:Moment {id: '${escGraph(momentId)}'}), (a:Actor {id: 'citizen:${from}'}) MERGE (a)-[r:link]->(m) SET r.r_type = 'CREATED', r.trust = 0.9, r.weight = 0.8`
+    ])
+    await redis.sendCommand(['GRAPH.QUERY', MSG_GRAPH,
+      `MATCH (m:Moment {id: '${escGraph(momentId)}'}), (a:Actor {id: 'citizen:${handle}'}) MERGE (m)-[r:link]->(a) SET r.r_type = 'TARGETS', r.trust = 0.8, r.weight = 0.7, r.energy = 0.7`
+    ])
+  } catch (e) {
+    console.error(`[/api/message] graph write failed:`, e.message)
+    // Continue anyway — dispatch still works without graph provenance
+  }
+
+  // 2. Find citizen dir
+  const citizenDir = findCitizenDir(handle)
+  if (!citizenDir) {
+    return res.status(404).json({ error: `No citizen folder found for @${handle}` })
+  }
+
+  // 3. Return immediately
+  res.json({ status: 'queued', target: `@${handle}`, message: message.slice(0, 80) })
+
+  // 4. Spawn claude --print in background
+  console.log(`[/api/message] ${from} → @${handle}: ${message.slice(0, 80)}`)
+
+  const child = spawn('sh', ['-c',
+    `echo '${message.replace(/'/g, "'\\''")}' | claude --print --continue --dangerously-skip-permissions`
+  ], {
+    cwd: citizenDir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 600000,
+  })
+
+  let stdout = ''
+  let stderr = ''
+  child.stdout.on('data', d => { stdout += d.toString() })
+  child.stderr.on('data', d => { stderr += d.toString() })
+
+  child.on('close', async (code) => {
+    const response = stdout.trim()
+    if (!response) {
+      console.log(`[/api/message] @${handle} — no response (exit ${code})${stderr ? ' stderr: ' + stderr.slice(0, 200) : ''}`)
+      return
+    }
+
+    console.log(`[/api/message] @${handle} responds (${response.length} chars)`)
+
+    // 5. Store response as Moment in L2
+    const respId = `moment:msg:${handle}_to_${from}_${now}`
+    try {
+      await redis.sendCommand(['GRAPH.QUERY', MSG_GRAPH,
+        `MERGE (m:Moment {id: '${escGraph(respId)}'}) SET m.name = '${escGraph(response.slice(0, 120))}', m.type = 'message', m.subtype = 'dialogue', m.content = '${escGraph(response.slice(0, 2000))}', m.energy = 0.6, m.weight = 0.6, m.origin_citizen = '${handle}', m.target_citizen = '${from}', m.status = 'delivered', m.created_at_s = ${now + 1}, m.updated_at_s = ${now + 1}`
+      ])
+      await redis.sendCommand(['GRAPH.QUERY', MSG_GRAPH,
+        `MATCH (m:Moment {id: '${escGraph(respId)}'}), (a:Actor {id: 'citizen:${handle}'}) MERGE (a)-[r:link]->(m) SET r.r_type = 'CREATED', r.trust = 0.9, r.weight = 0.8`
+      ])
+      await redis.sendCommand(['GRAPH.QUERY', MSG_GRAPH,
+        `MATCH (m:Moment {id: '${escGraph(momentId)}'}) SET m.status = 'delivered'`
+      ])
+    } catch (e) {
+      console.error(`[/api/message] response graph write failed:`, e.message)
+    }
+  })
+})
 
 const PORT = process.env.API_PORT || 3001
 app.listen(PORT, () => console.log(`API on :${PORT}`))
