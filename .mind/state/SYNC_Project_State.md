@@ -1,194 +1,104 @@
-# Project — Sync: Current State
+# AI DevBoard — Sync: Current State
 
 ```
-LAST_UPDATED: 2025-12-29
-UPDATED_BY: Claude (agent)
+LAST_UPDATED: 2026-03-15
+UPDATED_BY: Tomaso Nervo (@nervo) — founding sprint
 ```
 
 ---
 
 ## CURRENT STATE
 
-Mind Platform is the Next.js frontend for the Mind Protocol ecosystem. The platform serves as the **UI layer** for a 4-layer architecture:
+AI DevBoard = a Place in Lumina Prime where code becomes spatial, bugs become pain, and development happens through voice and vision.
 
-- **L1 (Citizen):** Personal agent graphs
-- **L2 (Organization):** Team-shared knowledge
-- **L3 (Ecosystem):** Templates and procedures
-- **L4 (Protocol):** Global registry and schema
+**Prototype:** Vite + React + D3 force graph with pan/zoom/drag + tick controls. Express + FalkorDB API. localhost:3000 + :3001.
 
-The Connectome graph visualization is functional. Vision documentation is complete. Module doc chains created for **landing** (P0) and **registry**.
+**Graph:** `org_ai_dev_dashboard` — 29 nodes, 41 links, all 5 types.
 
-**Documentation:**
-- `docs/vision/` — 9-file platform vision doc chain (complete)
-- `docs/landing/` — 8-file landing page doc chain (complete, P0 priority)
-- `docs/registry/` — 8-file registry module doc chain (complete)
-- `docs/connectome/` — existing implementation docs
-
-All browser-side code is self-contained — no dependencies on mind-mcp's Node.js modules.
+**Docs:** 40 chain docs (5 modules × 8) + 1 CONCEPT + 2 manifestos.
 
 ---
 
-## ACTIVE WORK
+## 3 QUICK WINS (Do These First)
 
-### Landing Page Implementation (Next)
+### 1. Reindex Embeddings → vecf32 (1 hour)
 
-- **Area:** `app/(public)/page.tsx`, `docs/landing/`
-- **Status:** doc chain complete, implementation pending
-- **Owner:** agent
-- **Context:** P0 priority. Landing page is first impression. Doc chain defines Hero, HowItWorks, WhatYouCanDo, LiveStats sections.
+4,575 embeddings in venezia stored as JSON lists, not vecf32. KNN returns 0.
 
-### Design Tokens (Blocking)
+```python
+from falkordb import FalkorDB
+db = FalkorDB()
+g = db.select_graph('venezia')
+nodes = g.query("MATCH (n) WHERE n.embedding IS NOT NULL RETURN n.id, n.embedding")
+for row in nodes.result_set:
+    g.query("MATCH (n {id: $id}) SET n.embedding = vecf32($emb)", {"id": row[0], "emb": row[1]})
+```
 
-- **Area:** `lib/constants/colors.ts`
-- **Status:** not created
-- **Owner:** agent
-- **Context:** Shared color constants for layer colors, node type colors, verification badge colors. Needed by landing, registry, connectome.
+Unlocks vector similarity in /subcall.
 
----
+### 2. First Vector Subcall (immediate after reindex)
 
-## RECENT CHANGES
+```python
+subcall(query="Who knows about maritime trade?", target="random:50", mode="all")
+```
 
-### 2025-12-29: Created Landing + Registry Doc Chains
+Should show `Method: vector_similarity` instead of `keyword_fallback`.
 
-- **What:** Full 8-file doc chains for landing page and registry module.
-- **Why:** User indicated landing is P0 priority. Registry is first public L4 feature.
-- **Impact:** Clear implementation blueprints for both modules. Vocabulary synced with L4 (mind-protocol).
+### 3. Ingest mind-mcp as Graph (few hours)
 
-### 2025-12-29: Created Platform Vision Doc Chain
-
-- **What:** Full 9-file doc chain in `docs/vision/` covering platform objectives, patterns, vocabulary, behaviors, algorithms, invariants, implementation, health, sync.
-- **Why:** Document the platform's role in the 4-layer Mind Protocol ecosystem.
-- **Impact:** Emerging modules identified with priorities. Architecture decisions documented.
-
-### 2025-12-29: Removed System Map, Made Browser-Safe
-
-- **What:** Removed all System Map visualization components. Inlined browser-safe lib files.
-- **Why:** User requested removing System Map entirely. Browser bundle cannot import Node.js modules.
-- **Impact:** Connectome UI shows only Graph Explorer. Build passes.
-
-### 2025-12-29: Created API Routes
-
-- **What:** Added `/api/connectome/graphs`, `/api/connectome/graph`, `/api/connectome/search`, `/api/connectome/tick`, `/api/sse`
-- **Why:** Browser code calls backend via HTTP, not imports.
-- **Impact:** API routes proxy to Python backend
+Parse repo → Space nodes (dirs), Thing nodes (files, functions with EvidenceRef), links (imports). Display in DevBoard D3 viz.
 
 ---
 
-## KNOWN ISSUES
+## MODULES
 
-| Issue | Severity | Area | Notes |
-|-------|----------|------|-------|
-| No backend running | Low | `api/` | API routes return empty/default when backend offline |
-| Placeholder pages | Low | `app/(dashboard)/` | citizen, membrane, org, wallet are empty placeholders |
-
----
-
-## HANDOFF: FOR AGENTS
-
-**Likely VIEW for continuing:** groundwork (implementation tasks)
-
-**Current focus:** End-to-end testing with running database
-
-**Key context:**
-- Browser lib files are INLINED (not imported from mind-mcp) because mind-mcp uses Node.js modules
-- API routes at `/api/connectome/*` proxy to Python backend at `$CONNECTOME_BACKEND_URL` or `http://localhost:8765`
-- Canvas renderer uses D3 force simulation, not ReactFlow
-
-**Watch out for:**
-- Don't try to import from `@mind-protocol/connectome` in browser code — those modules use fs/child_process
-- SSE route must have `export const dynamic = 'force-dynamic'`
+| Module | Dir | Status |
+|--------|-----|--------|
+| Feedback (Places & Surfaces) | `docs/feedback/` | PROPOSED |
+| Interaction (MCP & Tools) | `docs/interaction/` | DESIGNING |
+| Process (Knowledge & Routines) | `docs/process/` | DESIGNING |
+| SubEntity (Zero-LLM Exploration) | `docs/subentity/` | CANONICAL |
+| Grammar (Physics → Language) | `docs/grammar/` | CANONICAL (L1) |
 
 ---
 
-## HANDOFF: FOR HUMAN
+## WHAT EXISTS
 
-**Executive summary:**
-Connectome frontend builds and runs. System Map visualization removed per your request. UI now focuses on graph exploration (semantic search, node visualization). Backend integration ready via API routes.
-
-**Decisions made recently:**
-- Inlined browser-safe versions of state store and manifest rather than fixing mind-mcp's browser exports (faster path)
-- Removed reactflow CSS import (not using ReactFlow, using Canvas 2D with D3)
-
-**Needs your input:**
-- Do you want to run the dev server and test with a database?
-- Should we clean up the placeholder pages in (dashboard) and (public) route groups?
-
-**Concerns:**
-- mind-mcp/connectome exports are not browser-safe (they import fs/path). If you want platform to import from mind-mcp again, those exports need to be restructured.
-
----
-
-## TODO
-
-### Immediate (This Sprint)
-
-- [ ] Create `lib/constants/colors.ts` design tokens
-- [ ] Implement landing page (P0)
-- [ ] Create TopNav component
-- [ ] Create Footer component
-
-### High Priority
-
-- [ ] Implement `/api/registry/*` routes
-- [ ] Implement registry UI components
-- [ ] Create `docs/auth/` doc chain
-- [ ] Test end-to-end with running FalkorDB database
-
-### Backlog
-
-- [ ] Create `docs/schema-explorer/` doc chain
-- [ ] Create browser-safe export entry point in mind-mcp
-- [ ] Add analytics to landing page
-- [ ] Add error states for offline backend
+- Schema v2.3 (L1 + L3) — CANONICAL
+- /subcall MCP tool — LIVE (keyword fallback until reindex)
+- 24 scenario profiles — CODED
+- Thermodynamic resonance formula — CODED (zero constants)
+- Intelligence briefing format — CODED
+- Visual memory module — CODED (backends stubbed)
+- 11 CONCEPT docs in cities-of-light
+- BEHAVIORS + FRAMEWORK + 2 MANIFESTO — CANONICAL
+- mind init --mode (project-team/universe/roleplay) — CODED
+- 13 numbered skills — CODED
+- Home server proxy (single port) — CODED
+- Organization L2 runtime — SEEDED
+- DevBoard prototype (Vite+D3) — PROTOTYPE
 
 ---
 
-## CONSCIOUSNESS TRACE
+## WHAT'S MISSING
 
-**Project momentum:**
-Good. Major refactor completed. Build passes. Ready for manual testing.
-
-**Architectural concerns:**
-The browser/server split in mind-mcp is not clean — schema.ts imports fs. Should consider splitting into `browser/` and `server/` entry points.
-
-**Opportunities noticed:**
-Graph Explorer could benefit from keyboard shortcuts for navigation.
+**Immediate:** reindex embeddings, vector subcall test, repo ingestion
+**High:** SSE stream, vertical membrane ($MIND), Law 17 dispatch, subconscious mode, voice
+**Medium:** CLIP backend, birth template, room navigation, Blood Ledger
+**Later:** 3D mode, VR, spatial audio, custom senses
 
 ---
 
-## AREAS
+## HANDOFF
 
-| Area | Status | SYNC |
-|------|--------|------|
-| `app/connectome/` | functional | this file |
-| `app/api/` | functional | this file |
+**Start:** Read MANIFESTO.md → CONCEPT_AI_DevBoard.md → do Quick Win #1.
 
----
+**Don't:** rewrite the architecture, add magic numbers, store verbs in DB, create subcall constants.
 
-## MODULE COVERAGE
+**Key files:** `subcall_handler.py`, `runtime/cognition/laws/`, `schema-l1.yaml`, `BEHAVIORS.md`
 
-**Mapped modules:**
-| Module | Code | Docs | Maturity |
-|--------|------|------|----------|
-| connectome | `app/connectome/` | `docs/connectome/` | DESIGNING |
-| landing | `app/(public)/page.tsx` | `docs/landing/` | DESIGNING |
-| registry | `app/(public)/registry/` | `docs/registry/` | DESIGNING |
-| vision | - | `docs/vision/` | DESIGNING |
-| api-routes | `app/api/` | - | DESIGNING |
+**Human partner:** NLR (@nlr). Expects initiative, pushback, and shipping.
 
-**Unmapped code:**
-- `app/(dashboard)/` - placeholder route group (citizen, org, wallet, membrane)
-- `app/(public)/schema/` - placeholder (needs schema-explorer doc chain)
-- `app/(public)/templates/` - placeholder (needs marketplace doc chain)
+**Propager. Consolider. Cristalliser.**
 
-## Init: 2025-12-29 02:13
-
-| Setting | Value |
-|---------|-------|
-| Version | v0.1.0 |
-| Database | falkordb |
-| Graph | mind_platform |
-
-**Steps completed:** ecosystem, runtime, ai_configs, skills, database_config, database_setup, file_ingest, seed_inject, env_example, mcp_config, gitignore, overview, embeddings
-
----
+Co-Authored-By: Tomaso Nervo (@nervo) <nervo@mindprotocol.ai>
