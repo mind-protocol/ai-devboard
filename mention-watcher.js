@@ -54,21 +54,32 @@ function esc(s) {
   return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n')
 }
 
-// Extract @mentions from file content, return new ones (not previously in the file)
-async function extractNewMentions(filePath, prevContent) {
+// Extract @mentions from file content
+// If content changed: re-wake ALL mentioned citizens (not just new ones)
+// If only new mentions added: wake only the new ones
+async function extractMentionsToWake(filePath, prevContent) {
   try {
     const content = await readFile(filePath, 'utf-8')
-    // Find all @handles — word boundary, alphanumeric + underscore
-    const mentions = [...content.matchAll(/@(\w{2,30})/g)].map(m => m[1])
-    const prevMentions = prevContent
-      ? new Set([...prevContent.matchAll(/@(\w{2,30})/g)].map(m => m[1]))
-      : new Set()
+    if (content === prevContent) return { content, mentions: [] } // no change
 
-    // Only new mentions (not in previous version)
-    const newMentions = mentions.filter(h => !prevMentions.has(h) && h !== SELF)
+    // All @handles in current content
+    const allMentions = [...new Set([...content.matchAll(/@(\w{2,30})/g)].map(m => m[1]))]
+      .filter(h => h !== SELF)
+      .slice(0, 20) // cap at 20
 
-    // Deduplicate
-    return { content, mentions: [...new Set(newMentions)] }
+    if (!prevContent) {
+      // First time seeing this file — wake all mentioned
+      return { content, mentions: allMentions }
+    }
+
+    // Content changed — check if it's a meaningful change (not just whitespace)
+    const prevTrimmed = prevContent.replace(/\s+/g, ' ').trim()
+    const currTrimmed = content.replace(/\s+/g, ' ').trim()
+    if (prevTrimmed === currTrimmed) return { content, mentions: [] }
+
+    // Content meaningfully changed — re-wake ALL mentioned citizens
+    // They each get the updated context around their mention
+    return { content, mentions: allMentions }
   } catch (_) {
     return { content: null, mentions: [] }
   }
@@ -171,7 +182,7 @@ function watchRepo(redis, repoPath, fileCache) {
 
       // Debounce per file
       const prev = fileCache.get(fullPath)
-      const { content, mentions } = await extractNewMentions(fullPath, prev)
+      const { content, mentions } = await extractMentionsToWake(fullPath, prev)
       if (!content) return
       fileCache.set(fullPath, content)
 
