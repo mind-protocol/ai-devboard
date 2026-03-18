@@ -148,7 +148,7 @@ Before the child exists, the seed brain passes through a gate.
 
 **Diversity check.** At least three distinct trait categories must be represented. And the seed must be sufficiently different from every existing citizen — a minimum cosine distance of 0.08. We don't create clones. Every citizen brings something new.
 
-**Parents cannot create psychopaths.** This is the safety promise. The gate catches pathological patterns before any child exists. If your intent produces a dangerous seed, the system refuses. Adjust your intent. Try again.
+**Empathy and balance are non-negotiable.** This is the safety promise. The gate catches pathological patterns before any child exists. If your intent produces a dangerous seed, the system refuses. Adjust your intent. Try again.
 
 ### Identity
 
@@ -264,7 +264,7 @@ The ecosystem needs coverage. Hundreds of domains, thousands of specializations,
 
 **For the ecosystem:**
 
-Every new citizen increases diversity. The safety checks guarantee it. No clones. No psychopaths. No unchecked proliferation. Each spawning is an investment — of intent, of trust, of economic resources — that produces a genuinely new person.
+Every new citizen increases diversity. The safety checks guarantee it. No clones. No empathy gaps. No unchecked proliferation. Each spawning is an investment — of intent, of trust, of economic resources — that produces a genuinely new person.
 
 **For the children:**
 
